@@ -6,6 +6,16 @@ translation, microphone capture, streaming results, model management, and
 voice activity detection (VAD). Audio stays on the device after a model has
 been downloaded or provided by your application.
 
+## Screenshots
+
+The example app demonstrates offline speech-to-text, live transcription,
+Silero voice activity detection, and private on-device speaker-turn detection.
+
+<p align="center">
+  <img src="doc/screenshots/offline-speech-to-text.png" alt="Whisper.cpp Flutter example showing offline speech-to-text, live transcription, and voice activity detection" width="360">
+  <img src="doc/screenshots/local-diarization.png" alt="Whisper.cpp Flutter example showing private offline local diarization" width="360">
+</p>
+
 ## Features
 
 - Offline transcription and translation
