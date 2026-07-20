@@ -167,6 +167,19 @@ Call `dispose()` on `WhisperEngine` and `WhisperVad` when finished. One-shot and
 streaming jobs reserve their engine until completion; create separate engine
 instances when parallel inference is required.
 
+## Author
+
+Developed and maintained by **Gurwinder Singh**, a full-stack web and mobile
+application developer at [Skyno Digital LLP](https://skynodigital.com/).
+
+- [Website](https://gurwinderdevx.com/)
+- [GitHub](https://github.com/47gurvinder)
+- [LinkedIn](https://www.linkedin.com/in/gurwinderdevx/)
+- [Upwork](https://www.upwork.com/freelancers/gurwinderdevx)
+
+This plugin builds on the work of the
+[whisper.cpp authors and contributors](https://github.com/ggml-org/whisper.cpp).
+
 ## License
 
 This plugin and the vendored whisper.cpp source are available under the MIT
