@@ -1,0 +1,56 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+
+# Dart and Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+pubspec.lock
+doc/api/
+
+# Android / Gradle
+.gradle/
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
+captures/
+
+# iOS / Xcode / CocoaPods
+Pods/
+.symlinks/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+Flutter/ephemeral/
+Flutter/Generated.xcconfig
+Flutter/flutter_export_environment.sh
+
+# Native build systems
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*~

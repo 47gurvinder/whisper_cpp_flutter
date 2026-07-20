@@ -1,0 +1,20 @@
+group 'com.skynodigital.whisper_cpp_flutter'
+version '1.0'
+
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.7.3' }
+}
+allprojects { repositories { google(); mavenCentral() } }
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'com.skynodigital.whisper_cpp_flutter'
+    compileSdk 35
+    defaultConfig {
+        minSdk 24
+        externalNativeBuild { cmake { cppFlags '-std=c++17 -O3 -fvisibility=hidden' } }
+        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' }
+    }
+    externalNativeBuild { cmake { path '../CMakeLists.txt'; version '3.22.1' } }
+}

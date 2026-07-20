@@ -1,0 +1,52 @@
+import Flutter
+import UIKit
+import AVFoundation
+
+public final class WhisperCppFlutterPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
+  private var sink: FlutterEventSink?
+  private let engine = AVAudioEngine()
+
+  public static func register(with registrar: FlutterPluginRegistrar) {
+    let instance = WhisperCppFlutterPlugin()
+    registrar.addMethodCallDelegate(instance, channel: FlutterMethodChannel(name: "whisper_cpp_flutter/recorder", binaryMessenger: registrar.messenger()))
+    FlutterEventChannel(name: "whisper_cpp_flutter/audio", binaryMessenger: registrar.messenger()).setStreamHandler(instance)
+  }
+  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "requestPermission":
+      AVAudioSession.sharedInstance().requestRecordPermission { granted in DispatchQueue.main.async { result(granted) } }
+    case "start":
+      let args = call.arguments as? [String: Any]
+      do { try start(rate: args?["sampleRate"] as? Double ?? 16000); result(nil) }
+      catch { result(FlutterError(code:"recording", message:error.localizedDescription, details:nil)) }
+    case "stop": stop(); result(nil)
+    default: result(FlutterMethodNotImplemented)
+    }
+  }
+  private func start(rate: Double) throws {
+    if engine.isRunning { return }
+    let session=AVAudioSession.sharedInstance()
+    try session.setCategory(.record, mode:.measurement, options:[.duckOthers])
+    try session.setActive(true)
+    let input=engine.inputNode
+    let hardwareFormat=input.outputFormat(forBus:0)
+    guard let format=AVAudioFormat(commonFormat:.pcmFormatFloat32, sampleRate:rate, channels:1, interleaved:false),
+          let converter=AVAudioConverter(from:hardwareFormat,to:format) else { throw NSError(domain:"WhisperRecorder",code:1) }
+    input.installTap(onBus:0, bufferSize:4096, format:hardwareFormat) { [weak self] buffer, _ in
+      let capacity=AVAudioFrameCount(Double(buffer.frameLength)*rate/hardwareFormat.sampleRate)+1
+      guard let output=AVAudioPCMBuffer(pcmFormat:format,frameCapacity:capacity) else{return}
+      var supplied=false
+      try? converter.convert(to:output,error:nil){_,status in
+        if supplied { status.pointee = .noDataNow; return nil }
+        supplied=true; status.pointee = .haveData; return buffer
+      }
+      guard let data=output.floatChannelData?[0], output.frameLength>0 else{return}
+      let bytes=Data(bytes:data,count:Int(output.frameLength)*MemoryLayout<Float>.size)
+      DispatchQueue.main.async{self?.sink?(FlutterStandardTypedData(bytes:bytes))}
+    }
+    engine.prepare(); try engine.start()
+  }
+  private func stop(){if engine.isRunning{engine.inputNode.removeTap(onBus:0);engine.stop();try? AVAudioSession.sharedInstance().setActive(false)}}
+  public func onListen(withArguments arguments:Any?, eventSink events:@escaping FlutterEventSink)->FlutterError?{sink=events;return nil}
+  public func onCancel(withArguments arguments:Any?)->FlutterError?{sink=nil;return nil}
+}
