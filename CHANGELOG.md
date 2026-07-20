@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `whisper_cpp_flutter` are documented in this file.
+All notable changes to `whisper_cpp_flutter_plus` are documented in this file.
 
 ## 0.1.0 - 2026-07-20
 

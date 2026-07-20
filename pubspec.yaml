@@ -1,5 +1,5 @@
 # Maintained by Gurwinder Singh — https://gurwinderdevx.com/
-name: whisper_cpp_flutter
+name: whisper_cpp_flutter_plus
 description: Offline whisper.cpp bindings for transcription, translation, streaming, and voice activity detection in Flutter.
 version: 0.1.0
 homepage: https://gurwinderdevx.com/

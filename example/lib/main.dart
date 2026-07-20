@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:whisper_cpp_flutter/whisper_cpp_flutter.dart';
+import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart';
 
 void main() {
   runApp(const WhisperExampleApp());

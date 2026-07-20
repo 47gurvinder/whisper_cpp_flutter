@@ -1,5 +1,5 @@
 Pod::Spec.new do |s|
-  s.name             = 'whisper_cpp_flutter'
+  s.name             = 'whisper_cpp_flutter_plus'
   s.version          = '0.1.0'
   s.summary          = 'Flutter bindings for whisper.cpp.'
   s.description      = 'Offline Whisper transcription, translation, VAD and streaming audio capture.'

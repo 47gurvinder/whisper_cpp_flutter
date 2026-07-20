@@ -1,4 +1,4 @@
-# whisper_cpp_flutter
+# whisper_cpp_flutter_plus
 
 Run private, offline speech-to-text in Flutter with `whisper.cpp` v1.9.1.
 This plugin provides native Android and iOS bindings for transcription,
@@ -38,13 +38,13 @@ Web, macOS, Windows, and Linux are not currently supported.
 Add the package to your Flutter project:
 
 ```sh
-flutter pub add whisper_cpp_flutter
+flutter pub add whisper_cpp_flutter_plus
 ```
 
 Import the public API:
 
 ```dart
-import 'package:whisper_cpp_flutter/whisper_cpp_flutter.dart';
+import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart';
 ```
 
 ## Platform configuration

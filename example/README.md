@@ -1,7 +1,7 @@
-# whisper_cpp_flutter example
+# whisper_cpp_flutter_plus example
 
 A complete Flutter example for private, on-device speech-to-text with
-`whisper_cpp_flutter`. It demonstrates how to download and load a whisper.cpp
+`whisper_cpp_flutter_plus`. It demonstrates how to download and load a whisper.cpp
 model, record microphone audio, transcribe a finished recording, and display
 live transcription updates while the user speaks.
 
