@@ -3,7 +3,9 @@
 A complete Flutter example for private, on-device speech-to-text with
 `whisper_cpp_flutter_plus`. It demonstrates how to download and load a whisper.cpp
 model, record microphone audio, transcribe a finished recording, and display
-live transcription updates while the user speaks.
+live transcription updates while the user speaks. It also demonstrates
+integrated Silero voice activity detection (VAD) for filtering silence before
+Whisper processes the audio.
 
 ## What this example demonstrates
 
@@ -15,9 +17,10 @@ live transcription updates while the user speaks.
 - Displaying transcription progress and handling cancellation
 - Showing confirmed and provisional live transcript text
 - Stopping a live session and flushing its final audio
+- Enabling or disabling integrated Silero VAD for recorded and live audio
 - Cleaning up the recorder, transcription task, and engine
 
-All transcription runs locally after the model has been downloaded.
+All transcription runs locally after the models have been downloaded.
 
 ## Requirements
 
@@ -26,7 +29,9 @@ All transcription runs locally after the model has been downloaded.
 - A physical Android or iOS device is recommended for microphone testing
 - Network access for the first model download
 
-The tiny English model is approximately 75 MB.
+The tiny English Whisper model is approximately 75 MB. The example also
+downloads `ggml-silero-v6.2.0.bin` for voice activity detection. Both files are
+cached in the application's managed model directory.
 
 ## Run the example
 
@@ -38,8 +43,9 @@ flutter pub get
 flutter run
 ```
 
-On the first launch, select **Download tiny English model**. Once the model is
-loaded, choose one of the two workflows:
+On the first launch, select **Download required models**. The example downloads
+only the Whisper or VAD model files that are not already cached. Once both
+models are available, choose one of the two workflows:
 
 1. **Record, then transcribe** captures a complete recording and transcribes it
    after recording stops.
@@ -47,7 +53,12 @@ loaded, choose one of the two workflows:
    finalizes the remaining audio when stopped.
 
 Grant microphone permission when prompted. Later launches reuse the downloaded
-model unless the application's data is removed.
+models unless the application's data is removed.
+
+**Voice activity detection** is enabled by default for both workflows. Turn off
+the switch before starting a recording or live transcription to compare the
+same workflows without silence filtering. The switch is locked while a
+recording or transcription is active.
 
 ## Use your own model workflow
 

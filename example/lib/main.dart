@@ -8,6 +8,22 @@ void main() {
   runApp(const WhisperExampleApp());
 }
 
+TranscribeOptions buildExampleTranscribeOptions({
+  required bool enableVad,
+  required String? vadModelPath,
+  bool tokenTimestamps = false,
+}) {
+  if (enableVad && vadModelPath == null) {
+    throw StateError('The VAD model is not available.');
+  }
+  return TranscribeOptions(
+    language: 'en',
+    tokenTimestamps: tokenTimestamps,
+    enableVad: enableVad,
+    vadModelPath: enableVad ? vadModelPath : null,
+  );
+}
+
 class WhisperExampleApp extends StatelessWidget {
   const WhisperExampleApp({super.key});
 
@@ -33,10 +49,15 @@ class TranscriptionPage extends StatefulWidget {
 }
 
 class _TranscriptionPageState extends State<TranscriptionPage> {
-  static const _modelName = 'ggml-tiny.en.bin';
-  static final _modelUrl = Uri.parse(
+  static const _whisperModelName = 'ggml-tiny.en.bin';
+  static final _whisperModelUrl = Uri.parse(
     'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/'
     'ggml-tiny.en.bin',
+  );
+  static const _vadModelName = 'ggml-silero-v6.2.0.bin';
+  static final _vadModelUrl = Uri.parse(
+    'https://huggingface.co/ggml-org/whisper-vad/resolve/main/'
+    'ggml-silero-v6.2.0.bin',
   );
 
   final _modelManager = WhisperModelManager();
@@ -50,10 +71,11 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
   StreamSubscription<int>? _progressSubscription;
   StreamSubscription<WhisperStreamUpdate>? _streamSubscription;
 
-  String _status = 'Checking for a downloaded model…';
+  String _status = 'Checking for downloaded models…';
   String _confirmedTranscript = '';
   String _partialTranscript = '';
   String? _error;
+  String? _vadModelPath;
   double? _downloadProgress;
   int _transcriptionProgress = 0;
   bool _isDownloading = false;
@@ -62,7 +84,8 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
   bool _isTranscribing = false;
   bool _isStartingLive = false;
   bool _isLiveTranscribing = false;
-  bool _hasModel = false;
+  bool _hasModels = false;
+  bool _enableVad = true;
 
   bool get _isBusy =>
       _isDownloading || _isLoading || _isTranscribing || _isStartingLive;
@@ -70,57 +93,94 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
   @override
   void initState() {
     super.initState();
-    unawaited(_findAndLoadModel());
+    unawaited(_findAndLoadModels());
   }
 
-  Future<void> _findAndLoadModel() async {
+  Future<void> _findAndLoadModels() async {
     try {
-      final model = await _modelManager.find(_modelName);
+      final whisperModel = await _modelManager.find(_whisperModelName);
+      final vadModel = await _modelManager.find(_vadModelName);
       if (!mounted) return;
-      if (model == null) {
+      if (whisperModel == null || vadModel == null) {
+        final missing = whisperModel == null && vadModel == null
+            ? 'the Whisper and Silero VAD models'
+            : whisperModel == null
+                ? 'the tiny English Whisper model'
+                : 'the Silero VAD model';
         setState(() {
-          _status = 'Download the tiny English model to begin.';
-          _hasModel = false;
+          _status = 'Download $missing to begin.';
+          _hasModels = false;
+          _vadModelPath = null;
         });
         return;
       }
-      setState(() => _hasModel = true);
-      await _loadModel(model.path);
+      setState(() {
+        _hasModels = true;
+        _vadModelPath = vadModel.path;
+      });
+      await _loadModel(whisperModel.path);
     } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _hasModels = false;
+        _vadModelPath = null;
+      });
       _showError('Could not check the model directory', error);
     }
   }
 
-  Future<void> _downloadModel() async {
+  Future<void> _downloadModels() async {
     setState(() {
       _isDownloading = true;
       _downloadProgress = null;
       _error = null;
-      _status = 'Downloading $_modelName…';
+      _status = 'Checking required models…';
     });
 
     try {
-      await for (final progress in _modelManager.download(
-        _modelUrl,
-        _modelName,
-      )) {
+      if (await _modelManager.find(_whisperModelName) == null) {
+        await _downloadModel(_whisperModelUrl, _whisperModelName);
         if (!mounted) return;
-        setState(() => _downloadProgress = progress.fraction);
       }
-      final model = await _modelManager.find(_modelName);
-      if (model == null) {
-        throw StateError('The downloaded model was not found.');
+      if (await _modelManager.find(_vadModelName) == null) {
+        await _downloadModel(_vadModelUrl, _vadModelName);
+        if (!mounted) return;
+      }
+      final whisperModel = await _modelManager.find(_whisperModelName);
+      final vadModel = await _modelManager.find(_vadModelName);
+      if (whisperModel == null || vadModel == null) {
+        throw StateError('One or more downloaded models were not found.');
       }
       if (!mounted) return;
       setState(() {
         _isDownloading = false;
-        _hasModel = true;
+        _downloadProgress = null;
+        _hasModels = true;
+        _vadModelPath = vadModel.path;
       });
-      await _loadModel(model.path);
+      await _loadModel(whisperModel.path);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _isDownloading = false);
+      setState(() {
+        _isDownloading = false;
+        _downloadProgress = null;
+        _hasModels = false;
+        _vadModelPath = null;
+      });
       _showError('Model download failed', error);
+    }
+  }
+
+  Future<void> _downloadModel(Uri url, String name) async {
+    if (mounted) {
+      setState(() {
+        _downloadProgress = null;
+        _status = 'Downloading $name…';
+      });
+    }
+    await for (final progress in _modelManager.download(url, name)) {
+      if (!mounted) return;
+      setState(() => _downloadProgress = progress.fraction);
     }
   }
 
@@ -128,7 +188,7 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
     setState(() {
       _isLoading = true;
       _error = null;
-      _status = 'Loading $_modelName…';
+      _status = 'Loading $_whisperModelName…';
     });
     try {
       final engine = await WhisperEngine.load(path);
@@ -140,11 +200,14 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
       setState(() {
         _engine = engine;
         _isLoading = false;
-        _status = 'Model ready. Tap Record and speak English.';
+        _status = 'Models ready. Tap Record and speak English.';
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _vadModelPath = null;
+      });
       _showError('Could not load the model', error);
     }
   }
@@ -207,8 +270,9 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
     try {
       final task = engine.transcribe(
         samples,
-        options: const TranscribeOptions(
-          language: 'en',
+        options: buildExampleTranscribeOptions(
+          enableVad: _enableVad,
+          vadModelPath: _vadModelPath,
           tokenTimestamps: true,
         ),
       );
@@ -251,7 +315,10 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
     });
     try {
       final task = await engine.transcribeMicrophone(
-        options: const TranscribeOptions(language: 'en'),
+        options: buildExampleTranscribeOptions(
+          enableVad: _enableVad,
+          vadModelPath: _vadModelPath,
+        ),
       );
       if (!mounted) {
         await task.cancel();
@@ -364,7 +431,8 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
             const SizedBox(height: 8),
             Text(
               'Download a model once, then transcribe a complete recording '
-              'or watch live text appear while you speak.',
+              'or watch live text appear while you speak. Silero voice '
+              'activity detection can filter silence before transcription.',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             const SizedBox(height: 24),
@@ -412,15 +480,25 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
               ),
             ],
             const SizedBox(height: 20),
-            if (!_hasModel)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Voice activity detection'),
+              subtitle: const Text('Filter silence with the Silero VAD model.'),
+              value: _enableVad,
+              onChanged: _isBusy || _isRecording || _isLiveTranscribing
+                  ? null
+                  : (value) => setState(() => _enableVad = value),
+            ),
+            const SizedBox(height: 12),
+            if (!_hasModels)
               FilledButton.icon(
-                onPressed: _isBusy ? null : _downloadModel,
+                onPressed: _isBusy ? null : _downloadModels,
                 icon: const Icon(Icons.download),
-                label: const Text('Download tiny English model (~75 MB)'),
+                label: const Text('Download required models'),
               )
             else if (_engine == null)
               FilledButton.icon(
-                onPressed: _isBusy ? null : _findAndLoadModel,
+                onPressed: _isBusy ? null : _findAndLoadModels,
                 icon: const Icon(Icons.refresh),
                 label: const Text('Retry loading model'),
               )
