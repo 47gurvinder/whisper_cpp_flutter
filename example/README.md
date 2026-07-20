@@ -5,7 +5,8 @@ A complete Flutter example for private, on-device speech-to-text with
 model, record microphone audio, transcribe a finished recording, and display
 live transcription updates while the user speaks. It also demonstrates
 integrated Silero voice activity detection (VAD) for filtering silence before
-Whisper processes the audio.
+Whisper processes the audio. A separate local diarization page demonstrates
+experimental TinyDiarize speaker-turn detection.
 
 ## What this example demonstrates
 
@@ -18,6 +19,7 @@ Whisper processes the audio.
 - Showing confirmed and provisional live transcript text
 - Stopping a live session and flushing its final audio
 - Enabling or disabling integrated Silero VAD for recorded and live audio
+- Detecting two-speaker turns locally with a TinyDiarize-compatible model
 - Cleaning up the recorder, transcription task, and engine
 
 All transcription runs locally after the models have been downloaded.
@@ -32,6 +34,9 @@ All transcription runs locally after the models have been downloaded.
 The tiny English Whisper model is approximately 75 MB. The example also
 downloads `ggml-silero-v6.2.0.bin` for voice activity detection. Both files are
 cached in the application's managed model directory.
+
+The optional diarization demo downloads `ggml-small.en-tdrz.bin`, which is
+approximately 465 MB and is cached separately.
 
 ## Run the example
 
@@ -59,6 +64,18 @@ models unless the application's data is removed.
 the switch before starting a recording or live transcription to compare the
 same workflows without silence filtering. The switch is locked while a
 recording or transcription is active.
+
+## Try local diarization
+
+Select **Diarization** in the app bar or **Try local diarization** on the main
+page. Download the TinyDiarize model, then choose **Record a conversation** and
+let two people take turns speaking English. The result displays each segment
+as Voice A or Voice B with local timestamps.
+
+TinyDiarize detects speaker-change boundaries rather than persistent speaker
+identities. The example alternates Voice A and Voice B after each detected
+turn, so it is intended for two-speaker recordings. Audio and inference remain
+on the device after the model has been downloaded.
 
 ## Use your own model workflow
 

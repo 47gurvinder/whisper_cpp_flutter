@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart';
 
+import 'diarization_page.dart';
+
 void main() {
   runApp(const WhisperExampleApp());
 }
@@ -419,7 +421,21 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Whisper.cpp Flutter')),
+      appBar: AppBar(
+        title: const Text('Whisper.cpp Flutter'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const DiarizationPage(),
+              ),
+            ),
+            icon: const Icon(Icons.record_voice_over),
+            label: const Text('Diarization'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
@@ -434,6 +450,19 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
               'or watch live text appear while you speak. Silero voice '
               'activity detection can filter silence before transcription.',
               style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonalIcon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const DiarizationPage(),
+                  ),
+                ),
+                icon: const Icon(Icons.groups),
+                label: const Text('Try local diarization'),
+              ),
             ),
             const SizedBox(height: 24),
             Card(
