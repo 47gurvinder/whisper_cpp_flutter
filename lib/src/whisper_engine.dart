@@ -7,6 +7,57 @@ import 'package:ffi/ffi.dart';
 import 'models.dart';
 import 'native_bindings.dart';
 
+final class _ModelLoadInvocation {
+  const _ModelLoadInvocation(this.modelPath, this.useGpu,
+      this.useFlashAttention, this.useDtw, this.dtwModel);
+  final String modelPath;
+  final bool useGpu, useFlashAttention, useDtw;
+  final int dtwModel;
+
+  int run() {
+    final n = NativeBindings.instance;
+    final path = modelPath.toNativeUtf8();
+    try {
+      final context = n.contextCreate(path, useGpu ? 1 : 0,
+          useFlashAttention ? 1 : 0, useDtw ? 1 : 0, dtwModel);
+      if (context == nullptr) {
+        throw WhisperException(n.lastError().toDartString());
+      }
+      return context.address;
+    } finally {
+      malloc.free(path);
+    }
+  }
+}
+
+final class _TranscriptionInvocation {
+  const _TranscriptionInvocation(
+      this.contextAddress, this.jobAddress, this.pcm16k);
+  final int contextAddress, jobAddress;
+  final Float32List pcm16k;
+
+  WhisperResult run() {
+    final n = NativeBindings.instance;
+    final context = Pointer<Void>.fromAddress(contextAddress);
+    final job = Pointer<Void>.fromAddress(jobAddress);
+    final samples = malloc<Float>(pcm16k.length);
+    samples.asTypedList(pcm16k.length).setAll(0, pcm16k);
+    try {
+      final out = n.run(context, job, samples, pcm16k.length);
+      if (out == nullptr) {
+        throw WhisperException(n.lastError().toDartString());
+      }
+      try {
+        return WhisperResult.fromJson(jsonDecode(out.toDartString()));
+      } finally {
+        n.stringFree(out);
+      }
+    } finally {
+      malloc.free(samples);
+    }
+  }
+}
+
 final class WhisperException implements Exception {
   const WhisperException(this.message);
   final String message;
@@ -18,7 +69,11 @@ final class WhisperTask {
     _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
       if (!_progress.isClosed) _progress.add(NativeBindings.instance.progress(_job));
     });
-    void done() { _timer.cancel(); _progress.close(); }
+    void done() {
+      _timer.cancel();
+      _progress.close();
+      NativeBindings.instance.jobFree(_job);
+    }
     result.then<void>((_) => done(), onError: (Object _, StackTrace __) => done());
   }
   final Pointer<Void> _job;
@@ -57,17 +112,9 @@ final class WhisperEngine {
 
   static Future<WhisperEngine> load(String modelPath,
       {WhisperConfig config = const WhisperConfig()}) async {
-    final address = await Isolate.run<int>(() {
-      final n = NativeBindings.instance;
-      final path = modelPath.toNativeUtf8();
-      try {
-        final ctx = n.contextCreate(path, config.useGpu ? 1 : 0,
-            config.useFlashAttention ? 1 : 0, config.useDtw ? 1 : 0,
-            config.dtwModel);
-        if (ctx == nullptr) throw WhisperException(n.lastError().toDartString());
-        return ctx.address;
-      } finally { malloc.free(path); }
-    });
+    final invocation = _ModelLoadInvocation(modelPath, config.useGpu,
+        config.useFlashAttention, config.useDtw, config.dtwModel);
+    final address = await Isolate.run<int>(invocation.run);
     return WhisperEngine._(Pointer<Void>.fromAddress(address));
   }
 
@@ -104,22 +151,10 @@ final class WhisperEngine {
     d('no_speech_thold', options.noSpeechThreshold); d('beam_patience', options.beamPatience);
     d('vad_threshold', options.vadThreshold); d('vad_max_speech_s', options.vadMaxSpeechSeconds);
     d('vad_samples_overlap', options.vadSamplesOverlap);
-    final contextAddress = _context.address;
-    final jobAddress = job.address;
     _activeJobs++;
-    final future = Isolate.run<WhisperResult>(() {
-      final n = NativeBindings.instance;
-      final context = Pointer<Void>.fromAddress(contextAddress);
-      final isolatedJob = Pointer<Void>.fromAddress(jobAddress);
-      final samples = malloc<Float>(pcm16k.length);
-      samples.asTypedList(pcm16k.length).setAll(0, pcm16k);
-      try {
-        final out = n.run(context, isolatedJob, samples, pcm16k.length);
-        if (out == nullptr) throw WhisperException(n.lastError().toDartString());
-        try { return WhisperResult.fromJson(jsonDecode(out.toDartString())); }
-        finally { n.stringFree(out); }
-      } finally { malloc.free(samples); n.jobFree(isolatedJob); }
-    });
+    final invocation =
+        _TranscriptionInvocation(_context.address, job.address, pcm16k);
+    final future = Isolate.run<WhisperResult>(invocation.run);
     future.then<void>((_) => _activeJobs--, onError: (Object _, StackTrace __) { _activeJobs--; });
     return WhisperTask._(job, future);
   }
