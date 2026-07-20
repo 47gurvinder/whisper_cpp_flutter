@@ -48,8 +48,9 @@ flutter pub get
 flutter run
 ```
 
-The example downloads the tiny English model, records microphone audio, and
-shows the offline transcription. The model download is required only once.
+The example downloads the tiny English model and demonstrates both complete
+recording transcription and recorder-style live transcription. The model
+download is required only once.
 
 ## Download and load a model
 
@@ -87,17 +88,55 @@ Silero VAD model path.
 ## Live microphone transcription
 
 ```dart
-final recorder = WhisperRecorder();
-if (await recorder.requestPermission()) {
-  final session = WhisperStreamSession(engine);
-  session.results.listen((partial) => print(partial.text));
-  (await recorder.start()).listen((chunk) => session.add(chunk.samples));
+final task = await engine.transcribeMicrophone(
+  options: const TranscribeOptions(language: 'en'),
+);
 
-  // Later:
-  await recorder.stop();
-  final complete = await session.close();
-}
+task.updates.listen((update) {
+  // confirmedText is append-only. partialText may change on later passes.
+  print(update.text);
+});
+
+// Later, flush the remaining audio and stop the microphone.
+final complete = await task.stop();
+print(complete.confirmedText);
 ```
+
+The plugin owns microphone permission, capture, rolling audio windows, overlap
+removal, timestamp rebasing, and final flushing. The default
+`WhisperStreamConfig` decodes every two seconds using a 30-second window and
+keeps the newest four seconds provisional. Smaller models are recommended when
+the transcript must keep up in real time on mobile hardware.
+
+`confirmedSegments` and `partialSegments` use timestamps measured from the
+beginning of the recording. Confirmed content never changes; partial content is
+intended to be replaced in the UI on every update. `stop()` completes normally,
+while `cancel()` aborts active inference and completes with a
+`WhisperException`.
+
+## Transcribe another PCM stream
+
+Any stream of mono floating-point PCM can use the same pipeline:
+
+```dart
+final task = engine.transcribeStream(
+  audioChunks, // Stream<RecordingChunk>
+  options: const TranscribeOptions(language: 'auto'),
+  config: const WhisperStreamConfig(
+    updateInterval: Duration(seconds: 2),
+    windowDuration: Duration(seconds: 30),
+    confirmationLag: Duration(seconds: 4),
+  ),
+);
+
+task.updates.listen((update) => print(update.text));
+final complete = await task.result; // completes when the input stream closes
+```
+
+Chunks are resampled continuously to 16 kHz inside the plugin. A stream must
+keep one sample rate for its lifetime. Integrated VAD remains optional: enable
+it through `TranscribeOptions.enableVad` and `vadModelPath` when a Silero model
+is available; live transcription does not otherwise require a second model.
 
 ## Standalone VAD
 
@@ -108,8 +147,8 @@ final ranges = vad.segments(samples);
 vad.dispose();
 ```
 
-Call `dispose()` on `WhisperEngine` and `WhisperVad` when finished. Do not run
-two transcription jobs concurrently on the same engine; create separate engine
+Call `dispose()` on `WhisperEngine` and `WhisperVad` when finished. One-shot and
+streaming jobs reserve their engine until completion; create separate engine
 instances when parallel inference is required.
 
 ## License

@@ -3,6 +3,12 @@ import 'dart:typed_data';
 enum WhisperSamplingStrategy { greedy, beamSearch }
 enum WhisperLogLevel { none, error, warning, info, debug, trace }
 
+final class WhisperException implements Exception {
+  const WhisperException(this.message);
+  final String message;
+  @override String toString() => 'WhisperException: $message';
+}
+
 final class WhisperConfig {
   const WhisperConfig({
     this.useGpu = true,

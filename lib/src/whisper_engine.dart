@@ -6,6 +6,8 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'models.dart';
 import 'native_bindings.dart';
+import 'recorder.dart';
+import 'streaming.dart';
 
 final class _ModelLoadInvocation {
   const _ModelLoadInvocation(this.modelPath, this.useGpu,
@@ -58,23 +60,21 @@ final class _TranscriptionInvocation {
   }
 }
 
-final class WhisperException implements Exception {
-  const WhisperException(this.message);
-  final String message;
-  @override String toString() => 'WhisperException: $message';
-}
-
 final class WhisperTask {
   WhisperTask._(this._job, this.result) {
     _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
-      if (!_progress.isClosed) _progress.add(NativeBindings.instance.progress(_job));
+      if (!_progress.isClosed) {
+        _progress.add(NativeBindings.instance.progress(_job));
+      }
     });
     void done() {
       _timer.cancel();
       _progress.close();
       NativeBindings.instance.jobFree(_job);
     }
-    result.then<void>((_) => done(), onError: (Object _, StackTrace __) => done());
+
+    result.then<void>((_) => done(),
+        onError: (Object _, StackTrace __) => done());
   }
   final Pointer<Void> _job;
   final Future<WhisperResult> result;
@@ -89,25 +89,45 @@ final class WhisperEngine {
   final Pointer<Void> _context;
   bool _disposed = false;
   int _activeJobs = 0;
+  bool _streamReserved = false;
 
   static String get version => NativeBindings.instance.version().toDartString();
-  static String get systemInfo => NativeBindings.instance.systemInfo().toDartString();
-  static Map<String,dynamic> benchmark({int threads=4}) {
-    final n=NativeBindings.instance,out=n.benchmark(threads);
-    try{return (jsonDecode(out.toDartString()) as Map).cast<String,dynamic>();}finally{n.stringFree(out);}
+  static String get systemInfo =>
+      NativeBindings.instance.systemInfo().toDartString();
+  static Map<String, dynamic> benchmark({int threads = 4}) {
+    final n = NativeBindings.instance, out = n.benchmark(threads);
+    try {
+      return (jsonDecode(out.toDartString()) as Map).cast<String, dynamic>();
+    } finally {
+      n.stringFree(out);
+    }
   }
 
-  Map<String,dynamic> get modelInfo {
-    if(_disposed)throw const WhisperException('Engine is disposed');
-    final n=NativeBindings.instance,out=n.modelInfo(_context);
-    if(out==nullptr)throw WhisperException(n.lastError().toDartString());
-    try{return (jsonDecode(out.toDartString()) as Map).cast<String,dynamic>();}finally{n.stringFree(out);}
+  Map<String, dynamic> get modelInfo {
+    if (_disposed) throw const WhisperException('Engine is disposed');
+    final n = NativeBindings.instance, out = n.modelInfo(_context);
+    if (out == nullptr) throw WhisperException(n.lastError().toDartString());
+    try {
+      return (jsonDecode(out.toDartString()) as Map).cast<String, dynamic>();
+    } finally {
+      n.stringFree(out);
+    }
   }
 
   List<int> tokenize(String text) {
-    if(_disposed)throw const WhisperException('Engine is disposed');
-    final n=NativeBindings.instance,input=text.toNativeUtf8();
-    try{final out=n.tokenize(_context,input);if(out==nullptr)throw WhisperException(n.lastError().toDartString());try{return (jsonDecode(out.toDartString()) as List).cast<int>();}finally{n.stringFree(out);}}finally{malloc.free(input);}
+    if (_disposed) throw const WhisperException('Engine is disposed');
+    final n = NativeBindings.instance, input = text.toNativeUtf8();
+    try {
+      final out = n.tokenize(_context, input);
+      if (out == nullptr) throw WhisperException(n.lastError().toDartString());
+      try {
+        return (jsonDecode(out.toDartString()) as List).cast<int>();
+      } finally {
+        n.stringFree(out);
+      }
+    } finally {
+      malloc.free(input);
+    }
   }
 
   static Future<WhisperEngine> load(String modelPath,
@@ -120,44 +140,197 @@ final class WhisperEngine {
 
   WhisperTask transcribe(Float32List pcm16k,
       {TranscribeOptions options = const TranscribeOptions()}) {
+    if (_streamReserved) {
+      throw const WhisperException(
+          'This engine is reserved by an active streaming transcription');
+    }
+    return _transcribeInternal(pcm16k, options: options);
+  }
+
+  /// Continuously transcribes an arbitrary stream of mono PCM chunks.
+  WhisperStreamTask transcribeStream(
+    Stream<RecordingChunk> audio, {
+    TranscribeOptions options = const TranscribeOptions(),
+    WhisperStreamConfig config = const WhisperStreamConfig(),
+  }) {
+    return _startStream(audio, options: options, config: config);
+  }
+
+  /// Requests microphone permission and starts live transcription in one call.
+  Future<WhisperStreamTask> transcribeMicrophone({
+    TranscribeOptions options = const TranscribeOptions(),
+    WhisperStreamConfig config = const WhisperStreamConfig(),
+  }) async {
+    _reserveStream(config);
+    final recorder = WhisperRecorder();
+    try {
+      if (!await recorder.requestPermission()) {
+        throw const WhisperException('Microphone permission was not granted');
+      }
+      final audio = await recorder.start();
+      return _startStream(
+        audio,
+        options: options,
+        config: config,
+        stopSource: recorder.stop,
+        alreadyReserved: true,
+      );
+    } catch (_) {
+      _streamReserved = false;
+      await recorder.stop();
+      rethrow;
+    }
+  }
+
+  WhisperStreamTask _startStream(
+    Stream<RecordingChunk> audio, {
+    required TranscribeOptions options,
+    required WhisperStreamConfig config,
+    Future<void> Function()? stopSource,
+    bool alreadyReserved = false,
+  }) {
+    if (!alreadyReserved) _reserveStream(config);
+    WhisperTask? activeInference;
+    try {
+      return WhisperStreamTask.start(
+        audio: audio,
+        config: config,
+        startInference: (samples, contextPrompt) {
+          final task = _transcribeInternal(
+            samples,
+            options: options,
+            streaming: true,
+            contextPrompt: contextPrompt,
+          );
+          activeInference = task;
+          return task.result.whenComplete(() {
+            if (identical(activeInference, task)) activeInference = null;
+          });
+        },
+        cancelInference: () => activeInference?.cancel(),
+        releaseEngine: () => _streamReserved = false,
+        stopSource: stopSource,
+      );
+    } catch (_) {
+      _streamReserved = false;
+      rethrow;
+    }
+  }
+
+  void _reserveStream(WhisperStreamConfig config) {
     if (_disposed) throw const WhisperException('Engine is disposed');
-    if (_activeJobs > 0) throw const WhisperException('This engine already has an active transcription job');
+    if (_activeJobs > 0 || _streamReserved) {
+      throw const WhisperException(
+          'This engine already has an active transcription job');
+    }
+    config.validate();
+    _streamReserved = true;
+  }
+
+  WhisperTask _transcribeInternal(
+    Float32List pcm16k, {
+    required TranscribeOptions options,
+    bool streaming = false,
+    String? contextPrompt,
+  }) {
+    if (_disposed) throw const WhisperException('Engine is disposed');
+    if (_activeJobs > 0) {
+      throw const WhisperException(
+          'This engine already has an active transcription job');
+    }
     final n = NativeBindings.instance;
     final job = n.jobCreate(options.strategy.index);
-    void i(String k, int v) { final p=k.toNativeUtf8(); n.setInt(job,p,v); malloc.free(p); }
-    void d(String k, double v) { final p=k.toNativeUtf8(); n.setDouble(job,p,v); malloc.free(p); }
-    void s(String k, String v) { final a=k.toNativeUtf8(), b=v.toNativeUtf8(); n.setString(job,a,b); malloc.free(a); malloc.free(b); }
-    i('threads', options.threads); i('translate', options.translate?1:0);
-    i('detect_language', options.detectLanguage?1:0); i('offset_ms', options.offsetMs);
-    i('duration_ms', options.durationMs); i('max_text_ctx', options.maxTextContext);
-    i('max_len', options.maxSegmentLength); i('max_tokens', options.maxTokensPerSegment);
-    i('audio_ctx', options.audioContext); i('token_timestamps', options.tokenTimestamps?1:0);
-    i('split_on_word', options.splitOnWord?1:0); i('suppress_blank', options.suppressBlank?1:0);
-    i('suppress_nst', options.suppressNonSpeechTokens?1:0); i('single_segment', options.singleSegment?1:0);
-    i('no_context', options.noContext?1:0); i('no_timestamps', options.noTimestamps?1:0);
-    i('print_special', options.printSpecialTokens?1:0); i('greedy_best_of', options.greedyBestOf);
-    i('tdrz', options.tinyDiarize?1:0); i('debug_mode', options.debugMode?1:0);
-    i('carry_initial_prompt', options.carryInitialPrompt?1:0);
-    i('beam_size', options.beamSize); i('vad', options.enableVad?1:0);
-    i('vad_min_speech_ms', options.vadMinSpeechMs); i('vad_min_silence_ms', options.vadMinSilenceMs);
-    i('vad_speech_pad_ms', options.vadSpeechPadMs); s('language', options.language);
-    if (options.initialPrompt != null) s('initial_prompt', options.initialPrompt!);
-    if (options.suppressRegex != null) s('suppress_regex', options.suppressRegex!);
-    if (options.vadModelPath != null) s('vad_model_path', options.vadModelPath!);
-    d('temperature', options.temperature); d('temperature_inc', options.temperatureIncrement);
-    d('thold_pt', options.timestampTokenThreshold); d('thold_ptsum', options.timestampTokenSumThreshold);
-    d('max_initial_ts', options.maxInitialTimestamp); d('length_penalty', options.lengthPenalty);
-    d('entropy_thold', options.entropyThreshold); d('logprob_thold', options.logProbabilityThreshold);
-    d('no_speech_thold', options.noSpeechThreshold); d('beam_patience', options.beamPatience);
-    d('vad_threshold', options.vadThreshold); d('vad_max_speech_s', options.vadMaxSpeechSeconds);
+    if (job == nullptr) {
+      throw WhisperException(n.lastError().toDartString());
+    }
+    void i(String k, int v) {
+      final p = k.toNativeUtf8();
+      n.setInt(job, p, v);
+      malloc.free(p);
+    }
+
+    void d(String k, double v) {
+      final p = k.toNativeUtf8();
+      n.setDouble(job, p, v);
+      malloc.free(p);
+    }
+
+    void s(String k, String v) {
+      final a = k.toNativeUtf8(), b = v.toNativeUtf8();
+      n.setString(job, a, b);
+      malloc.free(a);
+      malloc.free(b);
+    }
+
+    i('threads', options.threads);
+    i('translate', options.translate ? 1 : 0);
+    i('detect_language', options.detectLanguage ? 1 : 0);
+    i('offset_ms', options.offsetMs);
+    i('duration_ms', options.durationMs);
+    i('max_text_ctx', options.maxTextContext);
+    i('max_len', options.maxSegmentLength);
+    i('max_tokens', options.maxTokensPerSegment);
+    i('audio_ctx', options.audioContext);
+    i('token_timestamps', streaming ? 1 : (options.tokenTimestamps ? 1 : 0));
+    i('split_on_word', options.splitOnWord ? 1 : 0);
+    i('suppress_blank', options.suppressBlank ? 1 : 0);
+    i('suppress_nst', options.suppressNonSpeechTokens ? 1 : 0);
+    i('single_segment', streaming ? 0 : (options.singleSegment ? 1 : 0));
+    i('no_context', streaming ? 1 : (options.noContext ? 1 : 0));
+    i('no_timestamps', streaming ? 0 : (options.noTimestamps ? 1 : 0));
+    i('print_special', options.printSpecialTokens ? 1 : 0);
+    i('greedy_best_of', options.greedyBestOf);
+    i('tdrz', options.tinyDiarize ? 1 : 0);
+    i('debug_mode', options.debugMode ? 1 : 0);
+    i('carry_initial_prompt', options.carryInitialPrompt ? 1 : 0);
+    i('beam_size', options.beamSize);
+    i('vad', options.enableVad ? 1 : 0);
+    i('vad_min_speech_ms', options.vadMinSpeechMs);
+    i('vad_min_silence_ms', options.vadMinSilenceMs);
+    i('vad_speech_pad_ms', options.vadSpeechPadMs);
+    s('language', options.language);
+    final prompt = [options.initialPrompt, contextPrompt]
+        .whereType<String>()
+        .where((value) => value.trim().isNotEmpty)
+        .join('\n');
+    if (prompt.isNotEmpty) s('initial_prompt', prompt);
+    if (options.suppressRegex != null) {
+      s('suppress_regex', options.suppressRegex!);
+    }
+    if (options.vadModelPath != null) {
+      s('vad_model_path', options.vadModelPath!);
+    }
+    d('temperature', options.temperature);
+    d('temperature_inc', options.temperatureIncrement);
+    d('thold_pt', options.timestampTokenThreshold);
+    d('thold_ptsum', options.timestampTokenSumThreshold);
+    d('max_initial_ts', options.maxInitialTimestamp);
+    d('length_penalty', options.lengthPenalty);
+    d('entropy_thold', options.entropyThreshold);
+    d('logprob_thold', options.logProbabilityThreshold);
+    d('no_speech_thold', options.noSpeechThreshold);
+    d('beam_patience', options.beamPatience);
+    d('vad_threshold', options.vadThreshold);
+    d('vad_max_speech_s', options.vadMaxSpeechSeconds);
     d('vad_samples_overlap', options.vadSamplesOverlap);
     _activeJobs++;
     final invocation =
         _TranscriptionInvocation(_context.address, job.address, pcm16k);
     final future = Isolate.run<WhisperResult>(invocation.run);
-    future.then<void>((_) => _activeJobs--, onError: (Object _, StackTrace __) { _activeJobs--; });
+    future.then<void>((_) => _activeJobs--, onError: (Object _, StackTrace __) {
+      _activeJobs--;
+    });
     return WhisperTask._(job, future);
   }
 
-  void dispose() { if (_activeJobs>0) throw const WhisperException('Cannot dispose an engine while transcription is running'); if (!_disposed) { NativeBindings.instance.contextFree(_context); _disposed=true; } }
+  void dispose() {
+    if (_activeJobs > 0 || _streamReserved) {
+      throw const WhisperException(
+          'Cannot dispose an engine while transcription is running');
+    }
+    if (!_disposed) {
+      NativeBindings.instance.contextFree(_context);
+      _disposed = true;
+    }
+  }
 }

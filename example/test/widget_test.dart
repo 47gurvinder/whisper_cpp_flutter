@@ -7,5 +7,7 @@ void main() {
 
     expect(find.text('Offline speech to text'), findsOneWidget);
     expect(find.text('Transcript'), findsOneWidget);
+    expect(find.textContaining('complete recording'), findsOneWidget);
+    expect(find.textContaining('live text'), findsOneWidget);
   });
 }

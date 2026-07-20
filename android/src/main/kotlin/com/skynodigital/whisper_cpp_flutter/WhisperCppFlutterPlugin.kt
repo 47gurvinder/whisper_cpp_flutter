@@ -39,11 +39,22 @@ class WhisperCppFlutterPlugin: FlutterPlugin, ActivityAware, MethodChannel.Metho
         }
     }
     private fun start(rate:Int, chunkMs:Int) {
+        val currentActivity=activity ?: throw IllegalStateException("Plugin is not attached to an activity")
+        if(currentActivity.checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED) throw SecurityException("Microphone permission is required")
         if(running.getAndSet(true)) return
-        val count=maxOf(AudioRecord.getMinBufferSize(rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_FLOAT),rate*chunkMs/1000)
-        if(activity!!.checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED) throw SecurityException("Microphone permission is required")
-        recorder=AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION,rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_FLOAT,count*4).also{it.startRecording()}
-        thread=Thread { val data=FloatArray(count); while(running.get()){ val n=recorder?.read(data,0,data.size,AudioRecord.READ_BLOCKING) ?: -1; if(n>0){ val bytes=ByteBuffer.allocate(n*4).order(ByteOrder.LITTLE_ENDIAN); for(i in 0 until n)bytes.putFloat(data[i]); activity?.runOnUiThread{sink?.success(bytes.array())} } } }.also{it.start()}
+        try {
+            val requestedSamples=rate*chunkMs/1000
+            val minBufferBytes=AudioRecord.getMinBufferSize(rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_FLOAT)
+            if(minBufferBytes<0)throw IllegalStateException("Unsupported microphone format")
+            val count=maxOf(requestedSamples,(minBufferBytes+3)/4)
+            recorder=AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION,rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_FLOAT,maxOf(minBufferBytes,count*4)).also{it.startRecording()}
+            thread=Thread { val data=FloatArray(count); while(running.get()){ val n=recorder?.read(data,0,data.size,AudioRecord.READ_BLOCKING) ?: -1; if(n>0){ val bytes=ByteBuffer.allocate(n*4).order(ByteOrder.LITTLE_ENDIAN); for(i in 0 until n)bytes.putFloat(data[i]); activity?.runOnUiThread{sink?.success(bytes.array())} } } }.also{it.start()}
+        } catch(error:Exception) {
+            running.set(false)
+            recorder?.release()
+            recorder=null
+            throw error
+        }
     }
     private fun stop(){running.set(false);recorder?.stop();thread?.join(500);recorder?.release();recorder=null;thread=null}
     override fun onListen(arguments:Any?, events:EventChannel.EventSink?){sink=events}

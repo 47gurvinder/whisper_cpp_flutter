@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'models.dart';
 import 'native_bindings.dart';
-import 'whisper_engine.dart';
 
 final class WhisperVad {
   WhisperVad._(this._context);

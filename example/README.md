@@ -1,7 +1,8 @@
 # whisper_cpp_flutter example
 
-This app downloads the `ggml-tiny.en.bin` model, records microphone audio,
-and transcribes it locally with `whisper_cpp_flutter`.
+This app downloads the `ggml-tiny.en.bin` model and demonstrates two local
+workflows with `whisper_cpp_flutter`: transcribing a complete recording, and
+continuous recorder-style transcription while speaking.
 
 Run it on a physical Android or iOS device:
 
