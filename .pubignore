@@ -1,0 +1,56 @@
+# Repository and local tooling
+.github/
+.dart_tool/
+.idea/
+.vscode/
+.DS_Store
+*.iml
+*.log
+*.tmp
+build/
+coverage/
+doc/api/
+pubspec.lock
+
+# Native build output
+.cxx/
+.gradle/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+DerivedData/
+Pods/
+
+# Generated example output
+example/.dart_tool/
+example/build/
+example/.gradle/
+example/android/.gradle/
+example/android/local.properties
+example/ios/Flutter/ephemeral/
+example/ios/Flutter/Generated.xcconfig
+example/ios/Flutter/flutter_export_environment.sh
+example/ios/Pods/
+example/ios/.symlinks/
+
+# Upstream whisper.cpp development files that are not used by this plugin.
+# Keep its LICENSE, CMake modules, headers, core sources, and ggml tree.
+third_party/whisper.cpp/.devops/
+third_party/whisper.cpp/.github/
+third_party/whisper.cpp/.pi/
+third_party/whisper.cpp/bindings/
+third_party/whisper.cpp/ci/
+third_party/whisper.cpp/examples/
+third_party/whisper.cpp/grammars/
+third_party/whisper.cpp/media/
+third_party/whisper.cpp/models/
+third_party/whisper.cpp/samples/
+third_party/whisper.cpp/scripts/
+third_party/whisper.cpp/tests/
+third_party/whisper.cpp/AGENTS.md
+third_party/whisper.cpp/CONTRIBUTING.md
+third_party/whisper.cpp/CMakePresets.json
+third_party/whisper.cpp/Makefile
+third_party/whisper.cpp/README_sycl.md
+third_party/whisper.cpp/build-xcframework.sh
+third_party/whisper.cpp/close-issue.yml

@@ -1,5 +1,3 @@
-library whisper_cpp_flutter;
-
 export 'src/models.dart';
 export 'src/model_manager.dart';
 export 'src/recorder.dart';

@@ -3,9 +3,9 @@ Pod::Spec.new do |s|
   s.version          = '0.1.0'
   s.summary          = 'Flutter bindings for whisper.cpp.'
   s.description      = 'Offline Whisper transcription, translation, VAD and streaming audio capture.'
-  s.homepage         = 'https://github.com/ggml-org/whisper.cpp'
+  s.homepage         = 'https://github.com/47gurvinder/whisper_cpp_flutter'
   s.license          = { :type => 'MIT', :file => '../LICENSE' }
-  s.author           = { 'SkynoDigital LLP' => 'dev@skynodigital.com' }
+  s.author           = { 'Gurwinder Singh' => 'contact@gurwinderdevx.com' }
   s.source           = { :path => '.' }
   s.source_files = [
     'Classes/**/*.{h,m,mm,swift}', '../src/*.{h,cpp}',
