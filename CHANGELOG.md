@@ -2,6 +2,21 @@
 
 All notable changes to `whisper_cpp_flutter_plus` are documented in this file.
 
+## 0.1.2 - 2026-07-20
+
+### Added
+
+- Added a dedicated local diarization example using the TinyDiarize-compatible
+  `ggml-small.en-tdrz.bin` model.
+- Added model download, microphone recording, progress, cancellation, and
+  speaker-turn visualization to the diarization example.
+- Added the `gdx` pub.dev topic for packages maintained by Gurwinder DevX.
+
+### Changed
+
+- Documented the experimental two-speaker TinyDiarize workflow and its
+  speaker-turn boundary limitations.
+
 ## 0.1.1 - 2026-07-20
 
 ### Changed
