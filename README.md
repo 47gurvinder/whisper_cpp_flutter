@@ -1,107 +1,141 @@
 # whisper_cpp_flutter
 
-Offline `whisper.cpp` v1.9.1 for Flutter, targeting Android and iOS only.
+Run private, offline speech-to-text in Flutter with `whisper.cpp` v1.9.1.
+This plugin provides native Android and iOS bindings for transcription,
+translation, microphone capture, streaming results, model management, and
+voice activity detection (VAD). Audio stays on the device after a model has
+been downloaded or provided by your application.
 
-## Included
+## Features
 
-- Transcription and translation
+- Offline transcription and translation
 - Automatic or explicit language selection
 - Greedy and beam-search decoding
-- Segment, word/token timestamps, probabilities and speaker-turn markers
-- Initial prompts, suppression and decoding thresholds
+- Segment, word, and token timestamps
+- Token probabilities and speaker-turn markers
+- Initial prompts, token suppression, and decoding thresholds
+- Non-blocking inference with progress updates and cancellation
+- Complete-recording and live microphone transcription
+- Windowed streaming for any mono PCM source
+- WAV decoding, channel mixing, and sample-rate conversion
 - Integrated and standalone Silero VAD, including continuous VAD
-- Non-blocking inference, progress streams and cancellation
-- Microphone capture as mono 16 kHz `Float32` PCM
-- Windowed real-time/streaming transcription
-- PCM and WAV input with channel mixing and resampling
-- Resumable model downloads, SHA-256 verification, listing and deletion
+- Resumable model downloads, SHA-256 verification, listing, and deletion
 - Android CPU acceleration for ARM64 and ARMv7
-- iOS Accelerate, Metal and optional Core ML encoder acceleration
+- iOS Accelerate, Metal, and optional Core ML encoder acceleration
 
-The package vendors the exact upstream source revision associated with stable
-whisper.cpp v1.9.1. Models are not bundled in the application.
+The package vendors the upstream source revision associated with stable
+`whisper.cpp` v1.9.1. Whisper and Silero model files are not bundled.
 
-## App configuration
+## Supported platforms
 
-Android already merges `RECORD_AUDIO`. Request it at runtime through
-`WhisperRecorder.requestPermission()`.
+- Android API 24 or later
+- iOS 14 or later
 
-Add this to the iOS application `Info.plist`:
+Web, macOS, Windows, and Linux are not currently supported.
+
+## Installation
+
+Add the package to your Flutter project:
+
+```sh
+flutter pub add whisper_cpp_flutter
+```
+
+Import the public API:
+
+```dart
+import 'package:whisper_cpp_flutter/whisper_cpp_flutter.dart';
+```
+
+## Platform configuration
+
+### Android
+
+The plugin adds `RECORD_AUDIO` to the merged manifest. Request permission at
+runtime with `WhisperRecorder.requestPermission()`, or let
+`WhisperEngine.transcribeMicrophone()` request it when live transcription
+starts.
+
+### iOS
+
+Add a microphone usage description to your application's `Info.plist`:
 
 ```xml
 <key>NSMicrophoneUsageDescription</key>
 <string>Microphone access is used for offline transcription.</string>
 ```
 
-The minimum versions are Android API 24 and iOS 14. Core ML is automatically
-used when a compiled encoder named like
-`ggml-base.en-encoder.mlmodelc` is placed next to `ggml-base.en.bin`; inference
-falls back to Metal/CPU if it is absent.
+To use Core ML acceleration, place a compiled encoder such as
+`ggml-base.en-encoder.mlmodelc` beside the matching `ggml-base.en.bin` model.
+If the encoder is unavailable, inference falls back to Metal or the CPU.
 
-## Run the example app
+## Load a model
 
-Connect a physical Android or iOS device, then run:
-
-```sh
-cd example
-flutter pub get
-flutter run
-```
-
-The example downloads the tiny English model and demonstrates both complete
-recording transcription and recorder-style live transcription. The model
-download is required only once.
-
-## Provide and load a model
-
-Models do not need to come from Hugging Face or be downloaded by this package.
-If your application downloads a model into its own cache or support directory,
-pass that readable local path directly to the engine:
+Your application can obtain a compatible GGML model from any source and pass
+its readable local filesystem path directly to the engine:
 
 ```dart
-final cacheModelPath = await downloadModelToAppCache();
-final engine = await WhisperEngine.load(cacheModelPath);
+final modelPath = await downloadModelToAppStorage();
+final engine = await WhisperEngine.load(modelPath);
 ```
 
-`WhisperEngine.load` does not copy or take ownership of the model. Keep the
-file available at that path until `engine.dispose()` is called.
+`WhisperEngine.load()` does not copy, move, or take ownership of the file. Keep
+the model available until `engine.dispose()` is called.
 
-`WhisperModelManager` is an optional convenience for applications that want
-the package to download and manage model files. Its downloader accepts any
-HTTP(S) URL; the Hugging Face URL below is only an example:
+### Optional model manager
+
+`WhisperModelManager` can download and manage models in the application support
+directory. It accepts any HTTP or HTTPS URL; Hugging Face is only one possible
+source.
 
 ```dart
 final models = WhisperModelManager();
+
 await for (final progress in models.download(
-  Uri.parse('https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin'),
+  Uri.parse(
+    'https://huggingface.co/ggerganov/whisper.cpp/'
+    'resolve/main/ggml-base.en.bin',
+  ),
   'ggml-base.en.bin',
-  sha256Hex: expectedSha256,
+  // sha256Hex: 'expected model checksum',
 )) {
   print(progress.fraction);
 }
 
 final model = await models.find('ggml-base.en.bin');
-final engine = await WhisperEngine.load(model!.path);
+if (model == null) {
+  throw StateError('Model download did not complete.');
+}
+
+final engine = await WhisperEngine.load(model.path);
 ```
+
+Supplying `sha256Hex` is recommended when the expected checksum is known.
 
 ## Transcribe a WAV file
 
+`WhisperAudio.readWav()` converts supported WAV input to the mono 16 kHz
+`Float32` PCM expected by whisper.cpp.
+
 ```dart
-final samples = await WhisperAudio.readWav(File('/path/audio.wav'));
-final task = engine.transcribe(samples, options: const TranscribeOptions(
-  language: 'auto',
-  tokenTimestamps: true,
-  enableVad: true,
-));
-task.progress.listen(print);
+final samples = await WhisperAudio.readWav(File('/path/to/audio.wav'));
+final task = engine.transcribe(
+  samples,
+  options: const TranscribeOptions(
+    language: 'auto',
+    tokenTimestamps: true,
+  ),
+);
+
+task.progress.listen((percent) => print('$percent%'));
+
 final result = await task.result;
 print(result.text);
 ```
 
-For integrated VAD, also set `vadModelPath` in `TranscribeOptions` to a local
-Silero VAD model path.
+Call `task.cancel()` to stop active inference.
 
-## Live microphone transcription
+## Transcribe the microphone live
 
 ```dart
 final task = await engine.transcribeMicrophone(
@@ -109,30 +143,30 @@ final task = await engine.transcribeMicrophone(
 );
 
 task.updates.listen((update) {
-  // confirmedText is append-only. partialText may change on later passes.
   print(update.text);
 });
 
-// Later, flush the remaining audio and stop the microphone.
+// Flush the remaining audio and finish the transcript.
 final complete = await task.stop();
 print(complete.confirmedText);
 ```
 
-The plugin owns microphone permission, capture, rolling audio windows, overlap
-removal, timestamp rebasing, and final flushing. The default
-`WhisperStreamConfig` decodes every two seconds using a 30-second window and
-keeps the newest four seconds provisional. Smaller models are recommended when
-the transcript must keep up in real time on mobile hardware.
+The plugin manages microphone permission, capture, rolling windows, overlap
+removal, timestamp rebasing, and final flushing. With the default
+`WhisperStreamConfig`, it decodes every two seconds using a 30-second window
+and keeps the newest four seconds provisional.
 
-`confirmedSegments` and `partialSegments` use timestamps measured from the
-beginning of the recording. Confirmed content never changes; partial content is
-intended to be replaced in the UI on every update. `stop()` completes normally,
-while `cancel()` aborts active inference and completes with a
+`confirmedText` and `confirmedSegments` are append-only. Partial content can
+change as later windows add context, so replace it in the UI on every update.
+`stop()` produces a final result, while `cancel()` aborts the operation with a
 `WhisperException`.
+
+Smaller models are recommended when transcription must keep up with speech on
+mobile hardware.
 
 ## Transcribe another PCM stream
 
-Any stream of mono floating-point PCM can use the same pipeline:
+Use the same streaming pipeline with any stream of mono PCM chunks:
 
 ```dart
 final task = engine.transcribeStream(
@@ -146,36 +180,85 @@ final task = engine.transcribeStream(
 );
 
 task.updates.listen((update) => print(update.text));
-final complete = await task.result; // completes when the input stream closes
+final complete = await task.result;
 ```
 
-Chunks are resampled continuously to 16 kHz inside the plugin. A stream must
-keep one sample rate for its lifetime. Integrated VAD remains optional: enable
-it through `TranscribeOptions.enableVad` and `vadModelPath` when a Silero model
-is available; live transcription does not otherwise require a second model.
+Chunks are continuously resampled to 16 kHz. The source must use one sample
+rate for the lifetime of a stream. The task completes when the source stream
+closes.
 
-## Standalone VAD
+## Voice activity detection
+
+For integrated VAD, set both `enableVad` and `vadModelPath`:
 
 ```dart
-final vad = WhisperVad.load('/path/ggml-silero-v6.2.0.bin');
-final speech = vad.isSpeech(samples);
-final ranges = vad.segments(samples);
+final task = engine.transcribe(
+  samples,
+  options: const TranscribeOptions(
+    enableVad: true,
+    vadModelPath: '/path/to/ggml-silero-v6.2.0.bin',
+  ),
+);
+```
+
+Silero VAD can also be used independently:
+
+```dart
+final vad = WhisperVad.load('/path/to/ggml-silero-v6.2.0.bin');
+final containsSpeech = vad.isSpeech(samples);
+final speechRanges = vad.segments(samples);
 vad.dispose();
 ```
 
-Call `dispose()` on `WhisperEngine` and `WhisperVad` when finished. One-shot and
-streaming jobs reserve their engine until completion; create separate engine
-instances when parallel inference is required.
+## Resource management
 
-## Author
+Call `dispose()` on every `WhisperEngine` and `WhisperVad` when it is no longer
+needed. A one-shot or streaming job reserves its engine until completion. Use
+separate engine instances for parallel inference.
+
+## Example application
+
+Connect a physical Android or iOS device and run:
+
+```sh
+cd example
+flutter pub get
+flutter run
+```
+
+The example downloads the tiny English model once and demonstrates both
+record-then-transcribe and recorder-style live transcription.
+
+## Need help with whisper.cpp or another AI solution?
+
+Looking to integrate this plugin into an existing app, build a custom product
+on top of whisper.cpp, or create another AI-powered mobile or web solution? I
+can help with architecture, Flutter plugin development, native Android and iOS
+integration, speech-to-text workflows, model integration, performance
+optimization, debugging, upgrades, and long-term maintenance.
+
+Whether you need a focused integration, a custom plugin, help maintaining an
+existing package, or a complete application, get in touch to discuss your
+requirements:
+
+- [Contact Gurwinder DevX](https://gurwinderdevx.com/)
+- [Hire me on Upwork](https://www.upwork.com/freelancers/gurwinderdevx)
+
+## Author and support
 
 Developed and maintained by **Gurwinder Singh**, a full-stack web and mobile
-application developer at [Skyno Digital LLP](https://skynodigital.com/).
+application developer and founder of
+[Gurwinder DevX](https://gurwinderdevx.com/).
 
-- [Website](https://gurwinderdevx.com/)
 - [GitHub](https://github.com/47gurvinder)
 - [LinkedIn](https://www.linkedin.com/in/gurwinderdevx/)
 - [Upwork](https://www.upwork.com/freelancers/gurwinderdevx)
+- [Buy Me a Coffee](https://buymeacoffee.com/gurwinderdevx)
+
+If this package helps your project, consider supporting its continued
+development through Buy Me a Coffee.
+
+## Acknowledgements
 
 This plugin builds on the work of the
 [whisper.cpp authors and contributors](https://github.com/ggml-org/whisper.cpp).

@@ -1,27 +1,104 @@
 # whisper_cpp_flutter example
 
-This app downloads the `ggml-tiny.en.bin` model and demonstrates two local
-workflows with `whisper_cpp_flutter`: transcribing a complete recording, and
-continuous recorder-style transcription while speaking.
+A complete Flutter example for private, on-device speech-to-text with
+`whisper_cpp_flutter`. It demonstrates how to download and load a whisper.cpp
+model, record microphone audio, transcribe a finished recording, and display
+live transcription updates while the user speaks.
 
-Run it on a physical Android or iOS device:
+## What this example demonstrates
+
+- Downloading and caching `ggml-tiny.en.bin`
+- Restoring the cached model on later launches
+- Requesting microphone permission
+- Capturing mono PCM audio from the microphone
+- Recording first and transcribing afterward
+- Displaying transcription progress and handling cancellation
+- Showing confirmed and provisional live transcript text
+- Stopping a live session and flushing its final audio
+- Cleaning up the recorder, transcription task, and engine
+
+All transcription runs locally after the model has been downloaded.
+
+## Requirements
+
+- Flutter 3.19 or later
+- Android API 24 or later, or iOS 14 or later
+- A physical Android or iOS device is recommended for microphone testing
+- Network access for the first model download
+
+The tiny English model is approximately 75 MB.
+
+## Run the example
+
+From the repository root:
 
 ```sh
+cd example
 flutter pub get
 flutter run
 ```
 
-The first run needs network access to download the model (about 75 MB). After
-that, transcription runs offline. Grant microphone permission when prompted.
+On the first launch, select **Download tiny English model**. Once the model is
+loaded, choose one of the two workflows:
 
-The package does not require this download workflow or a Hugging Face model
-source. An application can use its own downloader, keep the model in its cache
-or support directory, and load that local path directly without copying it:
+1. **Record, then transcribe** captures a complete recording and transcribes it
+   after recording stops.
+2. **Transcribe live** displays local transcription updates as you speak and
+   finalizes the remaining audio when stopped.
+
+Grant microphone permission when prompted. Later launches reuse the downloaded
+model unless the application's data is removed.
+
+## Use your own model workflow
+
+The plugin does not require Hugging Face or its built-in model manager. Your
+application can use its own authenticated downloader, cache, asset delivery
+system, or model registry and then load the resulting local path:
 
 ```dart
-final cacheModelPath = await downloadModelToAppCache();
-final engine = await WhisperEngine.load(cacheModelPath);
+final modelPath = await downloadModelToAppStorage();
+final engine = await WhisperEngine.load(modelPath);
 ```
 
-The application owns the file and must keep it available until
+The application owns the model file. Keep it readable until
 `engine.dispose()` is called.
+
+## Adapting the example
+
+The example is intentionally small enough to use as a starting point. Replace
+the tiny English model with another compatible model, customize
+`TranscribeOptions` and `WhisperStreamConfig`, or connect transcript updates to
+your own state management and user interface.
+
+For real-time use on mobile devices, begin with a smaller model and measure
+performance on the oldest hardware your application supports.
+
+## Need integration help or a custom AI solution?
+
+Want help adding offline transcription to your app, building a custom product
+on top of whisper.cpp, maintaining an existing Flutter plugin, or developing a
+different AI-powered mobile or web solution? I can help with technical
+planning, Flutter and native integration, model workflows, performance
+optimization, debugging, upgrades, and long-term maintenance.
+
+- [Discuss your project through Gurwinder DevX](https://gurwinderdevx.com/)
+- [Hire me on Upwork](https://www.upwork.com/freelancers/gurwinderdevx)
+
+## Author and support
+
+Developed and maintained by **Gurwinder Singh**, a full-stack web and mobile
+application developer and founder of
+[Gurwinder DevX](https://gurwinderdevx.com/).
+
+- [GitHub](https://github.com/47gurvinder)
+- [LinkedIn](https://www.linkedin.com/in/gurwinderdevx/)
+- [Upwork](https://www.upwork.com/freelancers/gurwinderdevx)
+- [Buy Me a Coffee](https://buymeacoffee.com/gurwinderdevx)
+
+If this example or plugin helps your project, consider supporting its continued
+development through Buy Me a Coffee.
+
+## Acknowledgements
+
+This example uses the Flutter plugin built on the work of the
+[whisper.cpp authors and contributors](https://github.com/ggml-org/whisper.cpp).
