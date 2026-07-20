@@ -13,3 +13,15 @@ flutter run
 
 The first run needs network access to download the model (about 75 MB). After
 that, transcription runs offline. Grant microphone permission when prompted.
+
+The package does not require this download workflow or a Hugging Face model
+source. An application can use its own downloader, keep the model in its cache
+or support directory, and load that local path directly without copying it:
+
+```dart
+final cacheModelPath = await downloadModelToAppCache();
+final engine = await WhisperEngine.load(cacheModelPath);
+```
+
+The application owns the file and must keep it available until
+`engine.dispose()` is called.

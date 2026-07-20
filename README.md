@@ -52,7 +52,23 @@ The example downloads the tiny English model and demonstrates both complete
 recording transcription and recorder-style live transcription. The model
 download is required only once.
 
-## Download and load a model
+## Provide and load a model
+
+Models do not need to come from Hugging Face or be downloaded by this package.
+If your application downloads a model into its own cache or support directory,
+pass that readable local path directly to the engine:
+
+```dart
+final cacheModelPath = await downloadModelToAppCache();
+final engine = await WhisperEngine.load(cacheModelPath);
+```
+
+`WhisperEngine.load` does not copy or take ownership of the model. Keep the
+file available at that path until `engine.dispose()` is called.
+
+`WhisperModelManager` is an optional convenience for applications that want
+the package to download and manage model files. Its downloader accepts any
+HTTP(S) URL; the Hugging Face URL below is only an example:
 
 ```dart
 final models = WhisperModelManager();

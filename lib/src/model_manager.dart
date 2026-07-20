@@ -22,6 +22,11 @@ final class WhisperModelManager {
   Future<File?> find(String name) async { final f=File('${(await directory).path}/$name'); return await f.exists()?f:null; }
   Future<void> delete(String name) async => File('${(await directory).path}/$name').delete();
 
+  /// Downloads a model from any HTTP(S) [url] into managed model storage.
+  ///
+  /// This is a convenience utility. Applications that download models
+  /// themselves can pass the resulting local path directly to
+  /// `WhisperEngine.load` instead.
   Stream<ModelDownloadProgress> download(Uri url, String name,
       {String? sha256Hex}) async* {
     final dir = await directory;

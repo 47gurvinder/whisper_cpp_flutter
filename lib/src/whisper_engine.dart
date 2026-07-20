@@ -130,6 +130,13 @@ final class WhisperEngine {
     }
   }
 
+  /// Loads a model from a readable local filesystem path.
+  ///
+  /// The model may come from any source, including a download performed by the
+  /// application and stored in its cache directory. `WhisperModelManager` is
+  /// optional; this method does not download, copy, or take ownership of the
+  /// model file. The caller must keep the file available until this engine is
+  /// disposed.
   static Future<WhisperEngine> load(String modelPath,
       {WhisperConfig config = const WhisperConfig()}) async {
     final invocation = _ModelLoadInvocation(modelPath, config.useGpu,
