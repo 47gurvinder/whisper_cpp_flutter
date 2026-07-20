@@ -2,6 +2,16 @@
 
 All notable changes to `whisper_cpp_flutter_plus` are documented in this file.
 
+## 0.1.1 - 2026-07-20
+
+### Changed
+
+- Expanded the example application to download and cache the Silero VAD model.
+- Enabled integrated VAD for recorded and live transcription in the example,
+  with an enabled-by-default switch for comparing behavior without VAD.
+- Documented the example's VAD setup, model requirements, and silence-filtering
+  behavior.
+
 ## 0.1.0 - 2026-07-20
 
 Initial public release for Android and iOS.
