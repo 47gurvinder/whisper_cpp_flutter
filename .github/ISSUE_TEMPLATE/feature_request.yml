@@ -1,0 +1,61 @@
+name: Feature request
+description: Suggest a new feature or improvement for whisper_cpp_flutter_plus
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve `whisper_cpp_flutter_plus`.
+
+        Before submitting, please search the existing issues to avoid creating a duplicate.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this feature solve?
+      description: Describe the use case and why the current API or behavior does not meet your needs.
+      placeholder: I am building ... and I need to ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to see?
+      description: Describe the feature, API, or behavior you would like added.
+      placeholder: It would be useful if the plugin could ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any workarounds or alternative solutions you have tried.
+
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Which platforms are affected?
+      multiple: true
+      options:
+        - Android
+        - iOS
+        - Another platform
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add examples, screenshots, links, or technical details that may help explain the request.
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to help implement this feature.

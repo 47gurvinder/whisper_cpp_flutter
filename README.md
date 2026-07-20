@@ -229,6 +229,13 @@ flutter run
 The example downloads the tiny English model once and demonstrates both
 record-then-transcribe and recorder-style live transcription.
 
+## Request a feature
+
+Need a capability that is not currently supported? [Submit a feature
+request](https://github.com/47gurvinder/whisper_cpp_flutter/issues/new?template=feature_request.yml)
+and describe your use case, desired behavior, and target platform. Please
+search the existing issues first to avoid duplicates.
+
 ## Need help with whisper.cpp or another AI solution?
 
 Looking to integrate this plugin into an existing app, build a custom product
