@@ -2,6 +2,13 @@
 
 All notable changes to `whisper_cpp_flutter_plus` are documented in this file.
 
+## 0.1.3 - 2026-07-20
+
+### Added
+
+- Added example-app screenshots to the package README, showcasing offline
+  speech-to-text, live transcription, Silero VAD, and local diarization.
+
 ## 0.1.2 - 2026-07-20
 
 ### Added
