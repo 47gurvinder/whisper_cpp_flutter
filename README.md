@@ -38,6 +38,19 @@ used when a compiled encoder named like
 `ggml-base.en-encoder.mlmodelc` is placed next to `ggml-base.en.bin`; inference
 falls back to Metal/CPU if it is absent.
 
+## Run the example app
+
+Connect a physical Android or iOS device, then run:
+
+```sh
+cd example
+flutter pub get
+flutter run
+```
+
+The example downloads the tiny English model, records microphone audio, and
+shows the offline transcription. The model download is required only once.
+
 ## Download and load a model
 
 ```dart

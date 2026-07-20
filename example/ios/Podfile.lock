@@ -1,0 +1,22 @@
+PODS:
+  - Flutter (1.0.0)
+  - whisper_cpp_flutter (0.1.0):
+    - Flutter
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - whisper_cpp_flutter (from `.symlinks/plugins/whisper_cpp_flutter/ios`)
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  whisper_cpp_flutter:
+    :path: ".symlinks/plugins/whisper_cpp_flutter/ios"
+
+SPEC CHECKSUMS:
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  whisper_cpp_flutter: 389827bc1b0dd15674afc739bf522b194c76cd8f
+
+PODFILE CHECKSUM: d71a8f9d234bf288cee64b372c30c196c8075224
+
+COCOAPODS: 1.16.2

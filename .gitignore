@@ -42,6 +42,7 @@ Flutter/Generated.xcconfig
 Flutter/flutter_export_environment.sh
 
 # Native build systems
+.cxx/
 cmake-build-*/
 CMakeFiles/
 CMakeCache.txt

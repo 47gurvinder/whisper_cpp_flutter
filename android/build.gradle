@@ -18,3 +18,7 @@ android {
     }
     externalNativeBuild { cmake { path '../CMakeLists.txt'; version '3.22.1' } }
 }
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+}
