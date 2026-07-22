@@ -239,6 +239,24 @@ flutter run
 The example downloads the tiny English model once and demonstrates both
 record-then-transcribe and recorder-style live transcription.
 
+### Reproducible benchmark
+
+The example also includes a fixed physical-device benchmark using the tiny
+English model and the 11-second JFK sample. It records model-load time, five
+warm transcription runs, native processing time, Dart/isolate overhead,
+real-time factor, and transcript accuracy in machine-readable JSON.
+
+Run the example on a physical device in release mode:
+
+```sh
+cd example
+flutter run --release -d DEVICE_ID
+```
+
+Open **Benchmark**, run the fixed workload, then choose **Copy results as JSON**.
+For valid manual comparisons, keep the physical device, OS, release mode,
+model hash, audio hash, and pinned benchmark configuration unchanged.
+
 ## Request a feature
 
 Need a capability that is not currently supported? [Submit a feature

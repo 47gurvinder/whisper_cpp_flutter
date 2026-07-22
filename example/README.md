@@ -21,6 +21,7 @@ experimental TinyDiarize speaker-turn detection.
 - Enabling or disabling integrated Silero VAD for recorded and live audio
 - Detecting two-speaker turns locally with a TinyDiarize-compatible model
 - Cleaning up the recorder, transcription task, and engine
+- Running a reproducible five-run performance and accuracy benchmark
 
 All transcription runs locally after the models have been downloaded.
 
@@ -90,6 +91,25 @@ final engine = await WhisperEngine.load(modelPath);
 
 The application owns the model file. Keep it readable until
 `engine.dispose()` is called.
+
+## Run the reproducible benchmark
+
+Select **Benchmark** in the example app to run the canonical workload and view
+or copy its JSON report. The report is also saved under the application's
+managed model directory. The benchmark downloads `ggml-tiny.en.bin` if needed;
+download and WAV decoding time are excluded.
+
+Run the example on a physical device in release mode:
+
+```sh
+flutter run --release -d DEVICE_ID
+```
+
+Open **Benchmark**, wait for all five measured runs, and choose **Copy results
+as JSON**. Repeat after an optimization and compare the copied reports
+manually. Keep the device, OS version, build mode, model/audio hashes, and
+pinned benchmark configuration identical. Debug, profile, simulator, and
+emulator results must not be compared with physical-device release baselines.
 
 ## Adapting the example
 

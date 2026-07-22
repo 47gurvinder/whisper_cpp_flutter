@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import AVFoundation
+import Darwin
 
 public final class WhisperCppFlutterPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var sink: FlutterEventSink?
@@ -23,6 +24,23 @@ public final class WhisperCppFlutterPlugin: NSObject, FlutterPlugin, FlutterStre
       do { try start(rate: rate, chunkMilliseconds: chunkMilliseconds); result(nil) }
       catch { result(FlutterError(code:"recording", message:error.localizedDescription, details:nil)) }
     case "stop": stop(); result(nil)
+    case "deviceInfo":
+      var system = utsname()
+      uname(&system)
+      let machine = withUnsafePointer(to: &system.machine) {
+        $0.withMemoryRebound(to: CChar.self, capacity: 1) {
+          String(cString: $0)
+        }
+      }
+      let device = UIDevice.current
+      result([
+        "manufacturer": "Apple",
+        "model": device.model,
+        "device": machine,
+        "hardware": machine,
+        "architecture": machine,
+        "identity": "Apple/\(device.model)/\(machine)"
+      ])
     default: result(FlutterMethodNotImplemented)
     }
   }

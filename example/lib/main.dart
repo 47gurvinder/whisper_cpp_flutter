@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart';
 
 import 'diarization_page.dart';
+import 'benchmark_page.dart';
 
 void main() {
   runApp(const WhisperExampleApp());
@@ -391,6 +392,19 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
     }
   }
 
+  Future<void> _openBenchmark() async {
+    if (_isBusy || _isRecording || _isLiveTranscribing) return;
+    _engine?.dispose();
+    setState(() {
+      _engine = null;
+      _status = 'Benchmark opened; the transcription model was unloaded.';
+    });
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const BenchmarkPage()),
+    );
+    if (mounted) unawaited(_findAndLoadModels());
+  }
+
   void _showError(String message, Object error) {
     if (!mounted) return;
     setState(() {
@@ -424,6 +438,13 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
       appBar: AppBar(
         title: const Text('Whisper.cpp Flutter'),
         actions: [
+          TextButton.icon(
+            onPressed: _isBusy || _isRecording || _isLiveTranscribing
+                ? null
+                : _openBenchmark,
+            icon: const Icon(Icons.speed),
+            label: const Text('Benchmark'),
+          ),
           TextButton.icon(
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(

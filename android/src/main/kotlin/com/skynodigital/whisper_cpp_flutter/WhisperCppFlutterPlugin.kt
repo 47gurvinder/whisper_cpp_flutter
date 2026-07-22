@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Build
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -35,6 +36,14 @@ class WhisperCppFlutterPlugin: FlutterPlugin, ActivityAware, MethodChannel.Metho
             "requestPermission" -> { val a=activity ?: return result.success(false); if(a.checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED) result.success(true) else { permissionResult=result; a.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),9142) } }
             "start" -> try { start(call.argument<Int>("sampleRate") ?: 16000, call.argument<Int>("chunkMilliseconds") ?: 100); result.success(null) } catch(e:Exception){result.error("recording",e.message,null)}
             "stop" -> { stop(); result.success(null) }
+            "deviceInfo" -> result.success(mapOf(
+                "manufacturer" to Build.MANUFACTURER,
+                "model" to Build.MODEL,
+                "device" to Build.DEVICE,
+                "hardware" to Build.HARDWARE,
+                "architecture" to Build.SUPPORTED_ABIS.joinToString(","),
+                "identity" to "${Build.MANUFACTURER}/${Build.MODEL}/${Build.DEVICE}/${Build.HARDWARE}"
+            ))
             else -> result.notImplemented()
         }
     }

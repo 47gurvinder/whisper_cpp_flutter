@@ -2,6 +2,14 @@
 
 All notable changes to `whisper_cpp_flutter_plus` are documented in this file.
 
+## Unreleased
+
+### Added
+
+- Added a reproducible physical-device benchmark with a fixed tiny English
+  model configuration, JFK audio fixture, five-run statistics, transcript
+  accuracy checks, cancellation, and copyable JSON results in the example app.
+
 ## 0.1.3 - 2026-07-20
 
 ### Added
