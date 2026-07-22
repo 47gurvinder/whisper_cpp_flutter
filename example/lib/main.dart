@@ -15,16 +15,20 @@ TranscribeOptions buildExampleTranscribeOptions({
   required bool enableVad,
   required String? vadModelPath,
   bool tokenTimestamps = false,
+  WhisperPerformanceMode? performanceMode,
 }) {
   if (enableVad && vadModelPath == null) {
     throw StateError('The VAD model is not available.');
   }
-  return TranscribeOptions(
+  final options = TranscribeOptions(
     language: 'en',
     tokenTimestamps: tokenTimestamps,
     enableVad: enableVad,
     vadModelPath: enableVad ? vadModelPath : null,
   );
+  return performanceMode == null
+      ? options
+      : options.withPerformanceMode(performanceMode);
 }
 
 class WhisperExampleApp extends StatelessWidget {
@@ -89,6 +93,7 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
   bool _isLiveTranscribing = false;
   bool _hasModels = false;
   bool _enableVad = true;
+  WhisperPerformanceMode _performanceMode = WhisperPerformanceMode.balanced;
 
   bool get _isBusy =>
       _isDownloading || _isLoading || _isTranscribing || _isStartingLive;
@@ -276,7 +281,7 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
         options: buildExampleTranscribeOptions(
           enableVad: _enableVad,
           vadModelPath: _vadModelPath,
-          tokenTimestamps: true,
+          performanceMode: _performanceMode,
         ),
       );
       _task = task;
@@ -540,6 +545,30 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
                   : (value) => setState(() => _enableVad = value),
             ),
             const SizedBox(height: 12),
+            DropdownButtonFormField<WhisperPerformanceMode>(
+              initialValue: _performanceMode,
+              decoration: const InputDecoration(
+                labelText: 'Offline performance mode',
+                helperText: 'Applies to completed recordings, not live text.',
+                border: OutlineInputBorder(),
+              ),
+              items: WhisperPerformanceMode.values
+                  .map(
+                    (mode) => DropdownMenuItem(
+                      value: mode,
+                      child: Text(_performanceModeLabel(mode)),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: _isBusy || _isRecording || _isLiveTranscribing
+                  ? null
+                  : (mode) {
+                      if (mode != null) {
+                        setState(() => _performanceMode = mode);
+                      }
+                    },
+            ),
+            const SizedBox(height: 12),
             if (!_hasModels)
               FilledButton.icon(
                 onPressed: _isBusy ? null : _downloadModels,
@@ -623,3 +652,9 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
     );
   }
 }
+
+String _performanceModeLabel(WhisperPerformanceMode mode) => switch (mode) {
+      WhisperPerformanceMode.responsive => 'Responsive',
+      WhisperPerformanceMode.balanced => 'Balanced',
+      WhisperPerformanceMode.efficient => 'Efficient',
+    };

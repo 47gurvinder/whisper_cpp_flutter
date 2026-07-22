@@ -105,15 +105,23 @@ Run the example on a physical device in release mode:
 flutter run --release -d DEVICE_ID
 ```
 
-Open **Benchmark**, wait for all five measured runs, and choose **Copy results
-as JSON**. Repeat after an optimization and compare the copied reports
-manually. Keep the device, OS version, build mode, model/audio hashes, and
-pinned benchmark configuration identical. Debug, profile, simulator, and
-emulator results must not be compared with physical-device release baselines.
+Open **Benchmark**, wait for the Responsive, Balanced, and Efficient profiles
+to complete three measured runs each, and choose **Copy results as JSON**. The
+comparison table shows latency, real-time factor, drift, accuracy, and the
+WAV size and duration alongside the effective decoding settings.
+Use **Play benchmark WAV** to hear the bundled source and cross-check each
+transcript; playback stops before and is excluded from measured time. Keep the
+device, OS version, build mode, model/audio hashes, and pinned benchmark
+configuration identical. Debug,
+profile, simulator, and emulator results must not be compared with
+physical-device release baselines. The benchmark does not measure battery or
+memory usage.
 
 ## Adapting the example
 
-The example is intentionally small enough to use as a starting point. Replace
+The example is intentionally small enough to use as a starting point. Its
+offline workflow includes a Responsive, Balanced, and Efficient mode selector;
+live transcription keeps its streaming-specific timestamp behavior. Replace
 the tiny English model with another compatible model, customize
 `TranscribeOptions` and `WhisperStreamConfig`, or connect transcript updates to
 your own state management and user interface.

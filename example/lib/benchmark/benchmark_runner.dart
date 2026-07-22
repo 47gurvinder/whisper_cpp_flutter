@@ -11,6 +11,24 @@ import 'package:whisper_cpp_flutter_plus/src/benchmark_report.dart';
 
 typedef BenchmarkProgress = void Function(String message, double? fraction);
 
+const benchmarkExecutionOrder = <List<WhisperPerformanceMode>>[
+  [
+    WhisperPerformanceMode.responsive,
+    WhisperPerformanceMode.balanced,
+    WhisperPerformanceMode.efficient,
+  ],
+  [
+    WhisperPerformanceMode.balanced,
+    WhisperPerformanceMode.efficient,
+    WhisperPerformanceMode.responsive,
+  ],
+  [
+    WhisperPerformanceMode.efficient,
+    WhisperPerformanceMode.responsive,
+    WhisperPerformanceMode.balanced,
+  ],
+];
+
 final class BenchmarkCancelledException implements Exception {
   const BenchmarkCancelledException();
 
@@ -79,7 +97,7 @@ final class WhisperBenchmarkRunner {
   static const referenceTranscript =
       'And so my fellow Americans, ask not what your country can do for you, '
       'ask what you can do for your country.';
-  static const measuredRunCount = 5;
+  static const measuredRunCount = 3;
   static const maximumAcceptedWordErrorRate = .25;
   static const _deviceChannel = MethodChannel('whisper_cpp_flutter/recorder');
 
@@ -90,7 +108,7 @@ final class WhisperBenchmarkRunner {
     dtwModel: 0,
   );
 
-  static const transcriptionOptions = TranscribeOptions(
+  static const baseTranscriptionOptions = TranscribeOptions(
     strategy: WhisperSamplingStrategy.greedy,
     threads: 4,
     language: 'en',
@@ -150,7 +168,9 @@ final class WhisperBenchmarkRunner {
     await for (final progress in manager.download(modelUrl, modelName)) {
       controller._check();
       onProgress?.call(
-          'Downloading $modelName outside measured time…', progress.fraction);
+        'Downloading $modelName outside measured time…',
+        progress.fraction,
+      );
     }
     final downloaded = await manager.find(modelName);
     if (downloaded == null) throw StateError('Downloaded model was not found');
@@ -163,7 +183,9 @@ final class WhisperBenchmarkRunner {
     BenchmarkProgress? onProgress,
   }) async {
     onProgress?.call(
-        'Preparing audio and model metadata off the UI thread…', null);
+      'Preparing audio and model metadata off the UI thread…',
+      null,
+    );
     final audioData = await rootBundle.load(audioAsset);
     final audioBytes = audioData.buffer.asUint8List(
       audioData.offsetInBytes,
@@ -200,49 +222,92 @@ final class WhisperBenchmarkRunner {
       loadWatch.stop();
       controller._check();
       final modelInfo = engine.modelInfo;
+      final warmups = <WhisperPerformanceMode, BenchmarkIteration>{};
+      final iterations = {
+        for (final mode in WhisperPerformanceMode.values)
+          mode: <BenchmarkIteration>[],
+      };
+      const totalTranscriptions = 12;
+      var completedTranscriptions = 0;
 
-      onProgress?.call('Running unmeasured warm-up…', null);
-      final warmup = await _runIteration(
-        engine,
-        samples,
-        index: 0,
-        audioDurationUs: audioDurationUs,
-        controller: controller,
-      );
-
-      final iterations = <BenchmarkIteration>[];
-      for (var index = 1; index <= measuredRunCount; index++) {
+      for (final mode in WhisperPerformanceMode.values) {
         controller._check();
         onProgress?.call(
-          'Running measured transcription $index of $measuredRunCount…',
-          index / measuredRunCount,
+          'Warming up ${_modeLabel(mode)} '
+          '(${warmups.length + 1} of ${WhisperPerformanceMode.values.length})…',
+          completedTranscriptions / totalTranscriptions,
         );
-        iterations.add(await _runIteration(
+        warmups[mode] = await _runIteration(
           engine,
           samples,
-          index: index,
+          options: baseTranscriptionOptions.withPerformanceMode(mode),
+          index: 0,
           audioDurationUs: audioDurationUs,
           controller: controller,
+        );
+        completedTranscriptions++;
+      }
+
+      for (var round = 0; round < benchmarkExecutionOrder.length; round++) {
+        for (final mode in benchmarkExecutionOrder[round]) {
+          controller._check();
+          onProgress?.call(
+            'Measured round ${round + 1} of $measuredRunCount · '
+            '${_modeLabel(mode)}…',
+            completedTranscriptions / totalTranscriptions,
+          );
+          iterations[mode]!.add(await _runIteration(
+            engine,
+            samples,
+            options: baseTranscriptionOptions.withPerformanceMode(mode),
+            index: round + 1,
+            audioDurationUs: audioDurationUs,
+            controller: controller,
+          ));
+          completedTranscriptions++;
+        }
+      }
+
+      final modeReports = <BenchmarkModeReport>[];
+      for (final mode in WhisperPerformanceMode.values) {
+        final modeIterations = iterations[mode]!;
+        _validateModeIterations(mode, modeIterations);
+        final options = baseTranscriptionOptions.withPerformanceMode(mode);
+        modeReports.add(BenchmarkModeReport(
+          mode: mode.name,
+          configuration: configurationForMode(mode, options),
+          warmup: warmups[mode]!,
+          iterations: List.unmodifiable(modeIterations),
+          statistics: _statistics(modeIterations),
+          accuracy: {
+            'expected_transcript': referenceTranscript,
+            'normalized_expected_transcript':
+                normalizeBenchmarkTranscript(referenceTranscript),
+            'maximum_accepted_word_error_rate': maximumAcceptedWordErrorRate,
+            'maximum_observed_word_error_rate': modeIterations
+                .map((value) => value.wordErrorRate)
+                .reduce(_maximum),
+            'transcripts_consistent': true,
+          },
         ));
       }
-      _validateIterations(iterations);
-      final environment = <String, dynamic>{
-        'operating_system': Platform.operatingSystem,
-        'operating_system_version': Platform.operatingSystemVersion,
-        'number_of_processors': Platform.numberOfProcessors,
-        'build_mode': kReleaseMode
-            ? 'release'
-            : kProfileMode
-                ? 'profile'
-                : 'debug',
-        'whisper_version': WhisperEngine.version,
-        'system_info': WhisperEngine.systemInfo,
-        'device': device,
-      };
+
       final report = WhisperBenchmarkReport(
-        schemaVersion: 2,
+        schemaVersion: 3,
         createdAtUtc: DateTime.now().toUtc(),
-        environment: environment,
+        environment: {
+          'operating_system': Platform.operatingSystem,
+          'operating_system_version': Platform.operatingSystemVersion,
+          'number_of_processors': Platform.numberOfProcessors,
+          'build_mode': kReleaseMode
+              ? 'release'
+              : kProfileMode
+                  ? 'profile'
+                  : 'debug',
+          'whisper_version': WhisperEngine.version,
+          'system_info': WhisperEngine.systemInfo,
+          'device': device,
+        },
         model: {
           'name': _fileName(modelFile.path),
           'bytes': modelLength,
@@ -259,20 +324,15 @@ final class WhisperBenchmarkRunner {
           'duration_us': audioDurationUs,
           'reference_transcript': referenceTranscript,
         },
-        configuration: _configurationJson(),
-        modelLoadMicroseconds: loadWatch.elapsedMicroseconds,
-        warmup: warmup,
-        iterations: List.unmodifiable(iterations),
-        statistics: _statistics(iterations),
-        accuracy: {
-          'expected_transcript': referenceTranscript,
-          'normalized_expected_transcript':
-              normalizeBenchmarkTranscript(referenceTranscript),
-          'maximum_accepted_word_error_rate': maximumAcceptedWordErrorRate,
-          'maximum_observed_word_error_rate':
-              iterations.map((value) => value.wordErrorRate).reduce(mathMax),
-          'transcripts_consistent': true,
+        benchmarkConfiguration: {
+          'warmup_runs_per_mode': 1,
+          'measured_runs_per_mode': measuredRunCount,
+          'execution_order': benchmarkExecutionOrder
+              .map((round) => round.map((mode) => mode.name).toList())
+              .toList(),
         },
+        modelLoadMicroseconds: loadWatch.elapsedMicroseconds,
+        modes: List.unmodifiable(modeReports),
       );
       report.validate(expectedIterations: measuredRunCount);
       onProgress?.call('Benchmark complete.', 1);
@@ -286,13 +346,14 @@ final class WhisperBenchmarkRunner {
   Future<BenchmarkIteration> _runIteration(
     WhisperEngine engine,
     Float32List samples, {
+    required TranscribeOptions options,
     required int index,
     required int audioDurationUs,
     required BenchmarkRunController controller,
   }) async {
     controller._check();
     final watch = Stopwatch()..start();
-    final task = engine.transcribe(samples, options: transcriptionOptions);
+    final task = engine.transcribe(samples, options: options);
     controller._activeTask = task;
     final WhisperResult result;
     try {
@@ -327,21 +388,27 @@ final class WhisperBenchmarkRunner {
     );
   }
 
-  void _validateIterations(List<BenchmarkIteration> iterations) {
+  void _validateModeIterations(
+    WhisperPerformanceMode mode,
+    List<BenchmarkIteration> iterations,
+  ) {
     if (iterations.length != measuredRunCount) {
-      throw StateError('Expected $measuredRunCount measured iterations');
+      throw StateError(
+        'Expected $measuredRunCount measured ${mode.name} iterations',
+      );
     }
     final transcript = iterations.first.normalizedTranscript;
     for (final iteration in iterations) {
       if (!iteration.realTimeFactor.isFinite ||
           !iteration.wordErrorRate.isFinite ||
           iteration.normalizedTranscript != transcript) {
-        throw StateError('Measured transcripts or metrics are inconsistent');
+        throw StateError('${_modeLabel(mode)} results are inconsistent');
       }
       if (iteration.wordErrorRate > maximumAcceptedWordErrorRate) {
         throw StateError(
-          'JFK word error rate ${iteration.wordErrorRate.toStringAsFixed(3)} '
-          'exceeds $maximumAcceptedWordErrorRate',
+          '${_modeLabel(mode)} JFK word error rate '
+          '${iteration.wordErrorRate.toStringAsFixed(3)} exceeds '
+          '$maximumAcceptedWordErrorRate',
         );
       }
     }
@@ -365,7 +432,12 @@ final class WhisperBenchmarkRunner {
         ),
       };
 
-  Map<String, dynamic> _configurationJson() => {
+  Map<String, dynamic> configurationForMode(
+    WhisperPerformanceMode mode,
+    TranscribeOptions options,
+  ) =>
+      {
+        'mode': mode.name,
         'model': {
           'use_gpu': modelConfiguration.useGpu,
           'use_flash_attention': modelConfiguration.useFlashAttention,
@@ -373,57 +445,51 @@ final class WhisperBenchmarkRunner {
           'dtw_model': modelConfiguration.dtwModel,
         },
         'transcription': {
-          'strategy': transcriptionOptions.strategy.name,
-          'threads': transcriptionOptions.threads,
-          'language': transcriptionOptions.language,
-          'translate': transcriptionOptions.translate,
-          'detect_language': transcriptionOptions.detectLanguage,
-          'offset_ms': transcriptionOptions.offsetMs,
-          'duration_ms': transcriptionOptions.durationMs,
-          'max_text_context': transcriptionOptions.maxTextContext,
-          'max_segment_length': transcriptionOptions.maxSegmentLength,
-          'max_tokens_per_segment': transcriptionOptions.maxTokensPerSegment,
-          'audio_context': transcriptionOptions.audioContext,
-          'token_timestamps': transcriptionOptions.tokenTimestamps,
-          'split_on_word': transcriptionOptions.splitOnWord,
-          'suppress_blank': transcriptionOptions.suppressBlank,
-          'suppress_non_speech_tokens':
-              transcriptionOptions.suppressNonSpeechTokens,
-          'single_segment': transcriptionOptions.singleSegment,
-          'no_context': transcriptionOptions.noContext,
-          'no_timestamps': transcriptionOptions.noTimestamps,
-          'print_special_tokens': transcriptionOptions.printSpecialTokens,
-          'tiny_diarize': transcriptionOptions.tinyDiarize,
-          'debug_mode': transcriptionOptions.debugMode,
-          'carry_initial_prompt': transcriptionOptions.carryInitialPrompt,
-          'initial_prompt': transcriptionOptions.initialPrompt,
-          'suppress_regex': transcriptionOptions.suppressRegex,
-          'temperature': transcriptionOptions.temperature,
-          'timestamp_token_threshold':
-              transcriptionOptions.timestampTokenThreshold,
-          'timestamp_token_sum_threshold':
-              transcriptionOptions.timestampTokenSumThreshold,
-          'max_initial_timestamp': transcriptionOptions.maxInitialTimestamp,
-          'length_penalty': transcriptionOptions.lengthPenalty,
-          'temperature_increment': transcriptionOptions.temperatureIncrement,
-          'entropy_threshold': transcriptionOptions.entropyThreshold,
-          'log_probability_threshold':
-              transcriptionOptions.logProbabilityThreshold,
-          'no_speech_threshold': transcriptionOptions.noSpeechThreshold,
-          'greedy_best_of': transcriptionOptions.greedyBestOf,
-          'beam_size': transcriptionOptions.beamSize,
-          'beam_patience': transcriptionOptions.beamPatience,
-          'enable_vad': transcriptionOptions.enableVad,
-          'vad_model_path': transcriptionOptions.vadModelPath,
-          'vad_threshold': transcriptionOptions.vadThreshold,
-          'vad_min_speech_ms': transcriptionOptions.vadMinSpeechMs,
-          'vad_min_silence_ms': transcriptionOptions.vadMinSilenceMs,
-          'vad_max_speech_seconds': transcriptionOptions.vadMaxSpeechSeconds,
-          'vad_speech_pad_ms': transcriptionOptions.vadSpeechPadMs,
-          'vad_samples_overlap': transcriptionOptions.vadSamplesOverlap,
+          'strategy': options.strategy.name,
+          'threads': options.threads,
+          'language': options.language,
+          'translate': options.translate,
+          'detect_language': options.detectLanguage,
+          'offset_ms': options.offsetMs,
+          'duration_ms': options.durationMs,
+          'max_text_context': options.maxTextContext,
+          'max_segment_length': options.maxSegmentLength,
+          'max_tokens_per_segment': options.maxTokensPerSegment,
+          'audio_context': options.audioContext,
+          'token_timestamps': options.tokenTimestamps,
+          'split_on_word': options.splitOnWord,
+          'suppress_blank': options.suppressBlank,
+          'suppress_non_speech_tokens': options.suppressNonSpeechTokens,
+          'single_segment': options.singleSegment,
+          'no_context': options.noContext,
+          'no_timestamps': options.noTimestamps,
+          'print_special_tokens': options.printSpecialTokens,
+          'tiny_diarize': options.tinyDiarize,
+          'debug_mode': options.debugMode,
+          'carry_initial_prompt': options.carryInitialPrompt,
+          'initial_prompt': options.initialPrompt,
+          'suppress_regex': options.suppressRegex,
+          'temperature': options.temperature,
+          'timestamp_token_threshold': options.timestampTokenThreshold,
+          'timestamp_token_sum_threshold': options.timestampTokenSumThreshold,
+          'max_initial_timestamp': options.maxInitialTimestamp,
+          'length_penalty': options.lengthPenalty,
+          'temperature_increment': options.temperatureIncrement,
+          'entropy_threshold': options.entropyThreshold,
+          'log_probability_threshold': options.logProbabilityThreshold,
+          'no_speech_threshold': options.noSpeechThreshold,
+          'greedy_best_of': options.greedyBestOf,
+          'beam_size': options.beamSize,
+          'beam_patience': options.beamPatience,
+          'enable_vad': options.enableVad,
+          'vad_model_path': options.vadModelPath,
+          'vad_threshold': options.vadThreshold,
+          'vad_min_speech_ms': options.vadMinSpeechMs,
+          'vad_min_silence_ms': options.vadMinSilenceMs,
+          'vad_max_speech_seconds': options.vadMaxSpeechSeconds,
+          'vad_speech_pad_ms': options.vadSpeechPadMs,
+          'vad_samples_overlap': options.vadSamplesOverlap,
         },
-        'warmup_runs': 1,
-        'measured_runs': measuredRunCount,
       };
 
   Future<Map<String, dynamic>> _readDeviceInfo() async {
@@ -448,6 +514,12 @@ final class WhisperBenchmarkRunner {
   }
 }
 
-double mathMax(double left, double right) => left > right ? left : right;
+double _maximum(double left, double right) => left > right ? left : right;
 
 String _fileName(String path) => Uri.file(path).pathSegments.last;
+
+String _modeLabel(WhisperPerformanceMode mode) => switch (mode) {
+      WhisperPerformanceMode.responsive => 'Responsive',
+      WhisperPerformanceMode.balanced => 'Balanced',
+      WhisperPerformanceMode.efficient => 'Efficient',
+    };

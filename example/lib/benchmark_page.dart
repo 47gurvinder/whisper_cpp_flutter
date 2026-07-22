@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,7 +23,10 @@ class BenchmarkPage extends StatefulWidget {
 
 class _BenchmarkPageState extends State<BenchmarkPage> {
   final _runner = const WhisperBenchmarkRunner();
+  final _audioPlayer = AudioPlayer();
+  late final StreamSubscription<PlayerState> _playerStateSubscription;
   bool _running = false;
+  bool _isPlayingAudio = false;
   String _status = 'Ready to run the canonical benchmark.';
   double? _progress;
   String? _error;
@@ -34,10 +38,16 @@ class _BenchmarkPageState extends State<BenchmarkPage> {
   void initState() {
     super.initState();
     _report = widget.initialReport;
+    _playerStateSubscription =
+        _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (!mounted) return;
+      setState(() => _isPlayingAudio = state == PlayerState.playing);
+    });
   }
 
   Future<void> _run() async {
     if (_running) return;
+    await _stopAudio();
     setState(() {
       _running = true;
       _error = null;
@@ -106,6 +116,29 @@ class _BenchmarkPageState extends State<BenchmarkPage> {
     });
   }
 
+  Future<void> _toggleAudio() async {
+    try {
+      if (_isPlayingAudio) {
+        await _stopAudio();
+      } else {
+        await _audioPlayer.play(
+          AssetSource('benchmark/jfk.wav', mimeType: 'audio/wav'),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not play benchmark WAV: $error')),
+      );
+    }
+  }
+
+  Future<void> _stopAudio() async {
+    if (_audioPlayer.state != PlayerState.stopped) {
+      await _audioPlayer.stop();
+    }
+  }
+
   void _update(String message, double? fraction) {
     if (!mounted || _controller?.isCancelled == true) return;
     setState(() {
@@ -125,6 +158,13 @@ class _BenchmarkPageState extends State<BenchmarkPage> {
   }
 
   @override
+  void dispose() {
+    unawaited(_playerStateSubscription.cancel());
+    unawaited(_audioPlayer.dispose());
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final report = _report;
     return PopScope(
@@ -141,8 +181,21 @@ class _BenchmarkPageState extends State<BenchmarkPage> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'tiny.en · JFK 11-second WAV · English · 4 threads · '
-                'greedy best-of 5 · token timestamps · 1 warm-up + 5 runs',
+                'tiny.en · JFK 11-second WAV · English · Responsive, '
+                'Balanced, and Efficient · 1 warm-up + 3 runs per mode',
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _running ? null : _toggleAudio,
+                  icon: Icon(_isPlayingAudio ? Icons.stop : Icons.play_arrow),
+                  label: Text(
+                    _isPlayingAudio
+                        ? 'Stop benchmark audio'
+                        : 'Play benchmark WAV',
+                  ),
+                ),
               ),
               const SizedBox(height: 12),
               if (!kReleaseMode)
@@ -196,9 +249,10 @@ class _BenchmarkPageState extends State<BenchmarkPage> {
                 ),
               if (report != null) ...[
                 const SizedBox(height: 24),
-                Text('Summary', style: Theme.of(context).textTheme.titleLarge),
+                Text('Comparison',
+                    style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
-                _Summary(report: report),
+                _Comparison(report: report),
                 const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: _copyJson,
@@ -206,15 +260,10 @@ class _BenchmarkPageState extends State<BenchmarkPage> {
                   label: const Text('Copy results as JSON'),
                 ),
                 const SizedBox(height: 20),
-                Text('Measured runs',
+                Text('Mode details',
                     style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
-                _Iterations(report: report),
-                const SizedBox(height: 20),
-                Text('Transcript',
-                    style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 8),
-                SelectableText(report.iterations.first.transcript),
+                _ModeDetails(report: report),
                 if (_savedPath != null) ...[
                   const SizedBox(height: 8),
                   SelectableText('Saved to $_savedPath'),
@@ -228,37 +277,81 @@ class _BenchmarkPageState extends State<BenchmarkPage> {
   }
 }
 
-class _Summary extends StatelessWidget {
-  const _Summary({required this.report});
+class _Comparison extends StatelessWidget {
+  const _Comparison({required this.report});
 
   final WhisperBenchmarkReport report;
 
   @override
   Widget build(BuildContext context) {
-    final wall = report.statistics['wall_us']!;
-    final native = report.statistics['native_us']!;
-    final overhead = report.statistics['overhead_us']!;
-    final rtf = report.statistics['real_time_factor']!;
-    final wer =
-        (report.accuracy['maximum_observed_word_error_rate'] as num).toDouble();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 28,
-          runSpacing: 16,
-          children: [
-            _Metric('Model load', _seconds(report.modelLoadMicroseconds)),
-            _Metric('Median wall', _seconds(wall.median)),
-            _Metric('Median native', _seconds(native.median)),
-            _Metric('Median overhead', _seconds(overhead.median)),
-            _Metric('Median RTF', rtf.median.toStringAsFixed(3)),
-            _Metric('Run drift',
-                '${wall.firstToLastDriftPercent.toStringAsFixed(1)}%'),
-            _Metric('Word error', '${(wer * 100).toStringAsFixed(1)}%'),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Wrap(
+              spacing: 28,
+              runSpacing: 16,
+              children: [
+                _Metric(
+                  'WAV duration',
+                  _seconds(report.audio['duration_us'] as num),
+                ),
+                _Metric(
+                  'WAV size',
+                  _fileSize(report.audio['bytes'] as int),
+                ),
+                _Metric(
+                  'Model load',
+                  _seconds(report.modelLoadMicroseconds),
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            columns: const [
+              DataColumn(label: Text('Mode')),
+              DataColumn(label: Text('Wall')),
+              DataColumn(label: Text('Native')),
+              DataColumn(label: Text('Overhead')),
+              DataColumn(label: Text('RTF')),
+              DataColumn(label: Text('Drift')),
+              DataColumn(label: Text('WER')),
+              DataColumn(label: Text('Threads')),
+              DataColumn(label: Text('Best-of')),
+              DataColumn(label: Text('Timestamps')),
+            ],
+            rows: report.modes.map((mode) {
+              final transcription = (mode.configuration['transcription'] as Map)
+                  .cast<String, dynamic>();
+              final wall = mode.statistics['wall_us']!;
+              final wer =
+                  (mode.accuracy['maximum_observed_word_error_rate'] as num)
+                      .toDouble();
+              return DataRow(cells: [
+                DataCell(Text(_modeLabel(mode.mode))),
+                DataCell(Text(_seconds(wall.median))),
+                DataCell(Text(_seconds(mode.statistics['native_us']!.median))),
+                DataCell(
+                    Text(_seconds(mode.statistics['overhead_us']!.median))),
+                DataCell(Text(mode.statistics['real_time_factor']!.median
+                    .toStringAsFixed(3))),
+                DataCell(Text(
+                    '${wall.firstToLastDriftPercent.toStringAsFixed(1)}%')),
+                DataCell(Text('${(wer * 100).toStringAsFixed(1)}%')),
+                DataCell(Text('${transcription['threads']}')),
+                DataCell(Text('${transcription['greedy_best_of']}')),
+                DataCell(Text(
+                    transcription['no_timestamps'] == true ? 'Off' : 'On')),
+              ]);
+            }).toList(growable: false),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -281,38 +374,77 @@ class _Metric extends StatelessWidget {
       );
 }
 
-class _Iterations extends StatelessWidget {
-  const _Iterations({required this.report});
+class _ModeDetails extends StatelessWidget {
+  const _ModeDetails({required this.report});
   final WhisperBenchmarkReport report;
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columns: const [
-            DataColumn(label: Text('Run')),
-            DataColumn(label: Text('Wall')),
-            DataColumn(label: Text('Native')),
-            DataColumn(label: Text('Overhead')),
-            DataColumn(label: Text('RTF')),
-            DataColumn(label: Text('WER')),
-          ],
-          rows: report.iterations
-              .map(
-                (run) => DataRow(cells: [
-                  DataCell(Text('${run.index}')),
-                  DataCell(Text(_seconds(run.wallMicroseconds))),
-                  DataCell(Text(_seconds(run.nativeMicroseconds))),
-                  DataCell(Text(_seconds(run.overheadMicroseconds))),
-                  DataCell(Text(run.realTimeFactor.toStringAsFixed(3))),
-                  DataCell(
-                      Text('${(run.wordErrorRate * 100).toStringAsFixed(1)}%')),
-                ]),
-              )
-              .toList(growable: false),
-        ),
+  Widget build(BuildContext context) => Column(
+        children: report.modes
+            .map((mode) => Card(
+                  child: ExpansionTile(
+                    key: ValueKey('benchmark-${mode.mode}'),
+                    title: Text(_modeLabel(mode.mode)),
+                    subtitle: Text(
+                      '${mode.iterations.length} measured runs · '
+                      'median ${_seconds(mode.statistics['wall_us']!.median)}',
+                    ),
+                    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    children: [
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          columns: const [
+                            DataColumn(label: Text('Run')),
+                            DataColumn(label: Text('Wall')),
+                            DataColumn(label: Text('Native')),
+                            DataColumn(label: Text('Overhead')),
+                            DataColumn(label: Text('RTF')),
+                            DataColumn(label: Text('WER')),
+                          ],
+                          rows: mode.iterations
+                              .map((run) => DataRow(cells: [
+                                    DataCell(Text('${run.index}')),
+                                    DataCell(
+                                        Text(_seconds(run.wallMicroseconds))),
+                                    DataCell(
+                                        Text(_seconds(run.nativeMicroseconds))),
+                                    DataCell(Text(
+                                        _seconds(run.overheadMicroseconds))),
+                                    DataCell(Text(
+                                        run.realTimeFactor.toStringAsFixed(3))),
+                                    DataCell(Text(
+                                        '${(run.wordErrorRate * 100).toStringAsFixed(1)}%')),
+                                  ]))
+                              .toList(growable: false),
+                        ),
+                      ),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Transcript'),
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: SelectableText(
+                          mode.iterations.first.transcript,
+                        ),
+                      ),
+                    ],
+                  ),
+                ))
+            .toList(growable: false),
       );
 }
 
 String _seconds(num microseconds) =>
     '${(microseconds / Duration.microsecondsPerSecond).toStringAsFixed(3)}s';
+
+String _fileSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  final kibibytes = bytes / 1024;
+  if (kibibytes < 1024) return '${kibibytes.toStringAsFixed(1)} KiB';
+  return '${(kibibytes / 1024).toStringAsFixed(2)} MiB';
+}
+
+String _modeLabel(String mode) =>
+    mode.isEmpty ? mode : '${mode[0].toUpperCase()}${mode.substring(1)}';

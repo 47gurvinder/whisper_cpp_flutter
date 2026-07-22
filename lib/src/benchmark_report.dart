@@ -145,6 +145,57 @@ final class BenchmarkIteration {
       );
 }
 
+final class BenchmarkModeReport {
+  const BenchmarkModeReport({
+    required this.mode,
+    required this.configuration,
+    required this.warmup,
+    required this.iterations,
+    required this.statistics,
+    required this.accuracy,
+  });
+
+  final String mode;
+  final Map<String, dynamic> configuration;
+  final BenchmarkIteration warmup;
+  final List<BenchmarkIteration> iterations;
+  final Map<String, BenchmarkStatistics> statistics;
+  final Map<String, dynamic> accuracy;
+
+  Map<String, dynamic> toJson() => {
+        'mode': mode,
+        'configuration': configuration,
+        'warmup': warmup.toJson(),
+        'iterations': iterations.map((value) => value.toJson()).toList(),
+        'statistics':
+            statistics.map((key, value) => MapEntry(key, value.toJson())),
+        'accuracy': accuracy,
+      };
+
+  factory BenchmarkModeReport.fromJson(Map<String, dynamic> json) =>
+      BenchmarkModeReport(
+        mode: json['mode'] as String,
+        configuration: (json['configuration'] as Map).cast<String, dynamic>(),
+        warmup: BenchmarkIteration.fromJson(
+          (json['warmup'] as Map).cast<String, dynamic>(),
+        ),
+        iterations: (json['iterations'] as List)
+            .map((value) => BenchmarkIteration.fromJson(
+                  (value as Map).cast<String, dynamic>(),
+                ))
+            .toList(growable: false),
+        statistics: (json['statistics'] as Map).map(
+          (key, value) => MapEntry(
+            key as String,
+            BenchmarkStatistics.fromJson(
+              (value as Map).cast<String, dynamic>(),
+            ),
+          ),
+        ),
+        accuracy: (json['accuracy'] as Map).cast<String, dynamic>(),
+      );
+}
+
 final class WhisperBenchmarkReport {
   const WhisperBenchmarkReport({
     required this.schemaVersion,
@@ -152,12 +203,9 @@ final class WhisperBenchmarkReport {
     required this.environment,
     required this.model,
     required this.audio,
-    required this.configuration,
+    required this.benchmarkConfiguration,
     required this.modelLoadMicroseconds,
-    required this.warmup,
-    required this.iterations,
-    required this.statistics,
-    required this.accuracy,
+    required this.modes,
   });
 
   final int schemaVersion;
@@ -165,12 +213,9 @@ final class WhisperBenchmarkReport {
   final Map<String, dynamic> environment;
   final Map<String, dynamic> model;
   final Map<String, dynamic> audio;
-  final Map<String, dynamic> configuration;
+  final Map<String, dynamic> benchmarkConfiguration;
   final int modelLoadMicroseconds;
-  final BenchmarkIteration warmup;
-  final List<BenchmarkIteration> iterations;
-  final Map<String, BenchmarkStatistics> statistics;
-  final Map<String, dynamic> accuracy;
+  final List<BenchmarkModeReport> modes;
 
   Map<String, dynamic> toJson() => {
         'schema_version': schemaVersion,
@@ -178,13 +223,9 @@ final class WhisperBenchmarkReport {
         'environment': environment,
         'model': model,
         'audio': audio,
-        'configuration': configuration,
+        'benchmark_configuration': benchmarkConfiguration,
         'model_load_us': modelLoadMicroseconds,
-        'warmup': warmup.toJson(),
-        'iterations': iterations.map((value) => value.toJson()).toList(),
-        'statistics':
-            statistics.map((key, value) => MapEntry(key, value.toJson())),
-        'accuracy': accuracy,
+        'modes': modes.map((value) => value.toJson()).toList(),
       };
 
   String encode({bool pretty = false}) =>
@@ -198,24 +239,14 @@ final class WhisperBenchmarkReport {
         environment: (json['environment'] as Map).cast<String, dynamic>(),
         model: (json['model'] as Map).cast<String, dynamic>(),
         audio: (json['audio'] as Map).cast<String, dynamic>(),
-        configuration: (json['configuration'] as Map).cast<String, dynamic>(),
+        benchmarkConfiguration:
+            (json['benchmark_configuration'] as Map).cast<String, dynamic>(),
         modelLoadMicroseconds: json['model_load_us'] as int,
-        warmup: BenchmarkIteration.fromJson(
-          (json['warmup'] as Map).cast<String, dynamic>(),
-        ),
-        iterations: (json['iterations'] as List)
-            .map((value) => BenchmarkIteration.fromJson(
+        modes: (json['modes'] as List)
+            .map((value) => BenchmarkModeReport.fromJson(
                   (value as Map).cast<String, dynamic>(),
                 ))
             .toList(growable: false),
-        statistics: (json['statistics'] as Map).map(
-          (key, value) => MapEntry(
-            key as String,
-            BenchmarkStatistics.fromJson(
-                (value as Map).cast<String, dynamic>()),
-          ),
-        ),
-        accuracy: (json['accuracy'] as Map).cast<String, dynamic>(),
       );
 
   factory WhisperBenchmarkReport.decode(String source) =>
@@ -223,28 +254,96 @@ final class WhisperBenchmarkReport {
         (jsonDecode(source) as Map).cast<String, dynamic>(),
       );
 
-  void validate({required int expectedIterations}) {
-    if (schemaVersion != 2) {
+  void validate({
+    Set<String> expectedModes = const {
+      'responsive',
+      'balanced',
+      'efficient',
+    },
+    int expectedIterations = 3,
+  }) {
+    if (schemaVersion != 3) {
       throw StateError('Unsupported benchmark schema $schemaVersion');
     }
-    if (iterations.length != expectedIterations) {
-      throw StateError(
-        'Expected $expectedIterations measured iterations, '
-        'found ${iterations.length}',
-      );
+    if (modelLoadMicroseconds <= 0) {
+      throw StateError('Benchmark contains an invalid model load time');
     }
-    final transcript = iterations.first.normalizedTranscript;
-    final maximumAccepted =
-        (accuracy['maximum_accepted_word_error_rate'] as num).toDouble();
-    for (final iteration in iterations) {
-      if (iteration.wallMicroseconds <= 0 ||
-          iteration.nativeMicroseconds <= 0 ||
-          !iteration.realTimeFactor.isFinite ||
-          !iteration.wordErrorRate.isFinite ||
-          iteration.normalizedTranscript != transcript ||
-          iteration.wordErrorRate > maximumAccepted) {
-        throw StateError('Benchmark contains invalid or inconsistent results');
+
+    final actualModes = modes.map((value) => value.mode).toSet();
+    if (actualModes.length != modes.length ||
+        actualModes.length != expectedModes.length ||
+        !actualModes.containsAll(expectedModes)) {
+      throw StateError(
+          'Benchmark modes are missing, duplicated, or unexpected');
+    }
+
+    for (final mode in modes) {
+      if (mode.iterations.length != expectedIterations) {
+        throw StateError(
+          'Expected $expectedIterations measured iterations for ${mode.mode}, '
+          'found ${mode.iterations.length}',
+        );
+      }
+      final maximumAcceptedValue =
+          mode.accuracy['maximum_accepted_word_error_rate'];
+      if (maximumAcceptedValue is! num) {
+        throw StateError('${mode.mode} has no valid WER threshold');
+      }
+      final maximumAccepted = maximumAcceptedValue.toDouble();
+      if (!maximumAccepted.isFinite || maximumAccepted < 0) {
+        throw StateError('${mode.mode} has an invalid WER threshold');
+      }
+      final maximumObservedValue =
+          mode.accuracy['maximum_observed_word_error_rate'];
+      if (maximumObservedValue is! num ||
+          !maximumObservedValue.toDouble().isFinite ||
+          maximumObservedValue < 0 ||
+          maximumObservedValue > maximumAccepted) {
+        throw StateError('${mode.mode} has an invalid observed WER');
+      }
+      if (mode.accuracy['transcripts_consistent'] != true) {
+        throw StateError('${mode.mode} reports inconsistent transcripts');
+      }
+
+      _validateIteration(mode.warmup, maximumAccepted, mode.mode);
+      final transcript = mode.iterations.first.normalizedTranscript;
+      for (final iteration in mode.iterations) {
+        _validateIteration(iteration, maximumAccepted, mode.mode);
+        if (iteration.normalizedTranscript != transcript) {
+          throw StateError('${mode.mode} has inconsistent transcripts');
+        }
+      }
+      for (final statistics in mode.statistics.values) {
+        final values = [
+          statistics.minimum,
+          statistics.median,
+          statistics.mean,
+          statistics.p95,
+          statistics.maximum,
+          statistics.standardDeviation,
+          statistics.firstToLastDriftPercent,
+        ];
+        if (values.any((value) => !value.isFinite)) {
+          throw StateError('${mode.mode} has non-finite statistics');
+        }
       }
     }
+  }
+}
+
+void _validateIteration(
+  BenchmarkIteration iteration,
+  double maximumAcceptedWordErrorRate,
+  String mode,
+) {
+  if (iteration.wallMicroseconds <= 0 ||
+      iteration.nativeMicroseconds <= 0 ||
+      iteration.overheadMicroseconds < 0 ||
+      !iteration.realTimeFactor.isFinite ||
+      iteration.realTimeFactor <= 0 ||
+      !iteration.wordErrorRate.isFinite ||
+      iteration.wordErrorRate < 0 ||
+      iteration.wordErrorRate > maximumAcceptedWordErrorRate) {
+    throw StateError('$mode contains invalid benchmark metrics');
   }
 }

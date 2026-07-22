@@ -13,6 +13,7 @@ environment:
   flutter: '>=3.19.0'
 
 dependencies:
+  audioplayers: 6.4.0
   crypto: ^3.0.6
   cupertino_icons: ^1.0.8
   flutter:

@@ -6,8 +6,14 @@ All notable changes to `whisper_cpp_flutter_plus` are documented in this file.
 
 ### Added
 
+- Added reusable Responsive, Balanced, and Efficient offline transcription
+  modes, plus an example mode selector.
+- Expanded the manual benchmark to compare all three modes with rotating run
+  order and complete schema-v3 JSON configuration reporting.
+- Added benchmark WAV playback for manually cross-checking generated
+  transcripts against the bundled source audio.
 - Added a reproducible physical-device benchmark with a fixed tiny English
-  model configuration, JFK audio fixture, five-run statistics, transcript
+  model configuration, JFK audio fixture, multi-run statistics, transcript
   accuracy checks, cancellation, and copyable JSON results in the example app.
 
 ## 0.1.3 - 2026-07-20

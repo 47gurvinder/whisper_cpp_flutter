@@ -145,6 +145,23 @@ print(result.text);
 
 Call `task.cancel()` to stop active inference.
 
+### Offline performance modes
+
+Apply a reusable performance mode to any offline transcription options:
+
+```dart
+final options = const TranscribeOptions(language: 'en')
+    .withPerformanceMode(WhisperPerformanceMode.responsive);
+final result = await engine.transcribe(samples, options: options).result;
+```
+
+`responsive` uses four threads with greedy best-of 1 and disables timestamps
+to prioritize latency. `balanced` preserves the package defaults. `efficient`
+uses two threads with greedy best-of 1 and disables timestamps to reduce CPU
+concurrency and decoding work; it does not guarantee lower latency or battery
+usage. These presets are intended for offline transcription and do not change
+streaming window behavior.
+
 ## Transcribe the microphone live
 
 ```dart
@@ -242,9 +259,11 @@ record-then-transcribe and recorder-style live transcription.
 ### Reproducible benchmark
 
 The example also includes a fixed physical-device benchmark using the tiny
-English model and the 11-second JFK sample. It records model-load time, five
-warm transcription runs, native processing time, Dart/isolate overhead,
-real-time factor, and transcript accuracy in machine-readable JSON.
+English model and the 11-second JFK sample. It compares Responsive, Balanced,
+and Efficient with one warm-up and three measured runs per mode, recording
+model-load time, native processing time, Dart/isolate overhead, real-time
+factor, WAV byte size and duration, transcript accuracy, and every resolved
+option in machine-readable JSON.
 
 Run the example on a physical device in release mode:
 
@@ -254,8 +273,12 @@ flutter run --release -d DEVICE_ID
 ```
 
 Open **Benchmark**, run the fixed workload, then choose **Copy results as JSON**.
+Use **Play benchmark WAV** to hear the bundled source and cross-check the
+displayed transcripts; playback is stopped before and excluded from benchmark
+timing.
 For valid manual comparisons, keep the physical device, OS, release mode,
-model hash, audio hash, and pinned benchmark configuration unchanged.
+model hash, audio hash, and pinned benchmark configuration unchanged. The
+benchmark measures latency and accuracy, not energy or memory consumption.
 
 ## Request a feature
 
