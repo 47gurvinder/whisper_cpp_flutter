@@ -2,7 +2,7 @@
 
 All notable changes to `whisper_cpp_flutter_plus` are documented in this file.
 
-## Unreleased
+## 0.2.0 - 2026-07-23
 
 ### Added
 
