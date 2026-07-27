@@ -2,6 +2,20 @@
 
 All notable changes to `whisper_cpp_flutter_plus` are documented in this file.
 
+## 0.3.0 - 2026-07-27
+
+### Added
+
+- Added iOS Swift Package Manager support alongside CocoaPods.
+- Added API documentation for the package's exported Dart types and members.
+
+### Changed
+
+- Reorganized the bundled whisper.cpp core and Flutter bridge into shared native
+  sources used by Android, CocoaPods, and Swift Package Manager.
+- Reformatted Dart sources for improved readability and maintainability without
+  intended behavior changes.
+
 ## 0.2.0 - 2026-07-23
 
 ### Added
