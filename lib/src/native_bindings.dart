@@ -1,3 +1,7 @@
+// The declarations in this file are implementation details rather than part of
+// the package's supported Dart API.
+// ignore_for_file: public_member_api_docs
+
 import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';

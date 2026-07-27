@@ -1,3 +1,6 @@
+/// Offline whisper.cpp transcription, streaming, recording, and VAD support.
+library;
+
 export 'src/models.dart';
 export 'src/model_manager.dart';
 export 'src/recorder.dart';

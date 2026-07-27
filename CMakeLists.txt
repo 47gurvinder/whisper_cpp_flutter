@@ -8,9 +8,13 @@ set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_METAL OFF CACHE BOOL "" FORCE)
-add_subdirectory(third_party/whisper.cpp whisper-build)
-add_library(whisper_flutter SHARED src/whisper_flutter.cpp)
-target_include_directories(whisper_flutter PRIVATE src third_party/whisper.cpp/include)
+set(WHISPER_NATIVE_ROOT ios/whisper_cpp_flutter_plus/Sources)
+add_subdirectory(${WHISPER_NATIVE_ROOT}/WhisperCppCore whisper-build)
+add_library(whisper_flutter SHARED
+  ${WHISPER_NATIVE_ROOT}/WhisperCppFlutterBridge/whisper_flutter.cpp)
+target_include_directories(whisper_flutter PRIVATE
+  ${WHISPER_NATIVE_ROOT}/WhisperCppFlutterBridge
+  ${WHISPER_NATIVE_ROOT}/WhisperCppCore/include)
 target_link_libraries(whisper_flutter PRIVATE whisper)
 if(ANDROID)
   target_link_libraries(whisper_flutter PRIVATE log android)

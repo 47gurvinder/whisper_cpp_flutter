@@ -190,7 +190,9 @@ ggml_metal_library_t ggml_metal_library_init(ggml_metal_device_t dev) {
             if (path_resource) {
                 path_source = [path_resource stringByAppendingPathComponent:@"ggml-metal.metal"];
             } else {
-                path_source = [bundle pathForResource:@"ggml-metal" ofType:@"metal"];
+                // Keep the shader as a text resource so Xcode does not require
+                // its optional offline Metal toolchain to build the package.
+                path_source = [bundle pathForResource:@"ggml-metal" ofType:@"txt"];
             }
 
             if (path_source == nil) {
@@ -205,6 +207,17 @@ ggml_metal_library_t ggml_metal_library_init(ggml_metal_device_t dev) {
                 GGML_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
                 return nil;
             }
+
+            NSString * common_path = [bundle pathForResource:@"ggml-common" ofType:@"h"];
+            NSString * impl_path = [bundle pathForResource:@"ggml-metal-impl" ofType:@"h"];
+            NSString * common = [NSString stringWithContentsOfFile:common_path encoding:NSUTF8StringEncoding error:&error];
+            NSString * impl = [NSString stringWithContentsOfFile:impl_path encoding:NSUTF8StringEncoding error:&error];
+            if (error || common == nil || impl == nil) {
+                GGML_LOG_ERROR("%s: error: could not load bundled Metal headers\n", __func__);
+                return nil;
+            }
+            src = [src stringByReplacingOccurrencesOfString:@"#include \"ggml-common.h\"" withString:common];
+            src = [src stringByReplacingOccurrencesOfString:@"#include \"ggml-metal-impl.h\"" withString:impl];
         }
 #endif
 

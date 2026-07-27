@@ -1,12 +1,17 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+/// Normalizes [value] for case-insensitive benchmark transcript comparison.
 String normalizeBenchmarkTranscript(String value) => value
     .toLowerCase()
     .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
     .replaceAll(RegExp(r'\s+'), ' ')
     .trim();
 
+/// Computes word error rate between [expected] and [actual].
+///
+/// The result is the Levenshtein word-edit distance divided by the expected
+/// word count.
 double benchmarkWordErrorRate(String expected, String actual) {
   final reference = normalizeBenchmarkTranscript(expected).split(' ');
   final hypothesis = normalizeBenchmarkTranscript(actual).split(' ');
@@ -30,7 +35,9 @@ double benchmarkWordErrorRate(String expected, String actual) {
   return previous.last / reference.length;
 }
 
+/// Distribution and drift statistics for one benchmark metric.
 final class BenchmarkStatistics {
+  /// Creates a set of precomputed statistics.
   const BenchmarkStatistics({
     required this.minimum,
     required this.median,
@@ -41,14 +48,30 @@ final class BenchmarkStatistics {
     required this.firstToLastDriftPercent,
   });
 
+  /// Smallest observed value.
   final double minimum;
+
+  /// Median observed value.
   final double median;
+
+  /// Arithmetic mean of all values.
   final double mean;
+
+  /// Nearest-rank 95th percentile.
   final double p95;
+
+  /// Largest observed value.
   final double maximum;
+
+  /// Population standard deviation.
   final double standardDeviation;
+
+  /// Percentage change from the first input value to the last.
   final double firstToLastDriftPercent;
 
+  /// Calculates statistics for non-empty [input].
+  ///
+  /// Throws [ArgumentError] when [input] is empty.
   factory BenchmarkStatistics.calculate(List<num> input) {
     if (input.isEmpty) {
       throw ArgumentError.value(input, 'input', 'Cannot be empty');
@@ -77,6 +100,7 @@ final class BenchmarkStatistics {
     );
   }
 
+  /// Converts this value to the benchmark report JSON schema.
   Map<String, dynamic> toJson() => {
         'min': minimum,
         'median': median,
@@ -87,6 +111,7 @@ final class BenchmarkStatistics {
         'first_to_last_drift_percent': firstToLastDriftPercent,
       };
 
+  /// Decodes statistics from the benchmark report JSON schema.
   factory BenchmarkStatistics.fromJson(Map<String, dynamic> json) =>
       BenchmarkStatistics(
         minimum: (json['min'] as num).toDouble(),
@@ -100,7 +125,9 @@ final class BenchmarkStatistics {
       );
 }
 
+/// Measurements and transcript output from one benchmark inference.
 final class BenchmarkIteration {
+  /// Creates one benchmark iteration.
   const BenchmarkIteration({
     required this.index,
     required this.wallMicroseconds,
@@ -112,15 +139,31 @@ final class BenchmarkIteration {
     required this.wordErrorRate,
   });
 
+  /// Zero-based measured iteration index.
   final int index;
+
+  /// End-to-end elapsed time in microseconds.
   final int wallMicroseconds;
+
+  /// Native inference time in microseconds.
   final int nativeMicroseconds;
+
+  /// Dart/isolate overhead in microseconds.
   final int overheadMicroseconds;
+
+  /// Inference duration divided by input-audio duration.
   final double realTimeFactor;
+
+  /// Transcript produced by this iteration.
   final String transcript;
+
+  /// Transcript after benchmark comparison normalization.
   final String normalizedTranscript;
+
+  /// Word error rate relative to the benchmark reference.
   final double wordErrorRate;
 
+  /// Converts this iteration to the benchmark report JSON schema.
   Map<String, dynamic> toJson() => {
         'index': index,
         'wall_us': wallMicroseconds,
@@ -132,6 +175,7 @@ final class BenchmarkIteration {
         'word_error_rate': wordErrorRate,
       };
 
+  /// Decodes an iteration from the benchmark report JSON schema.
   factory BenchmarkIteration.fromJson(Map<String, dynamic> json) =>
       BenchmarkIteration(
         index: json['index'] as int,
@@ -145,7 +189,9 @@ final class BenchmarkIteration {
       );
 }
 
+/// Benchmark results collected for one performance mode.
 final class BenchmarkModeReport {
+  /// Creates a report for one performance mode.
   const BenchmarkModeReport({
     required this.mode,
     required this.configuration,
@@ -155,13 +201,25 @@ final class BenchmarkModeReport {
     required this.accuracy,
   });
 
+  /// Performance-mode identifier.
   final String mode;
+
+  /// Effective transcription configuration for this mode.
   final Map<String, dynamic> configuration;
+
+  /// Unmeasured warm-up inference.
   final BenchmarkIteration warmup;
+
+  /// Measured inference iterations.
   final List<BenchmarkIteration> iterations;
+
+  /// Aggregated statistics keyed by metric name.
   final Map<String, BenchmarkStatistics> statistics;
+
+  /// Accuracy thresholds and consistency results.
   final Map<String, dynamic> accuracy;
 
+  /// Converts this mode report to the benchmark report JSON schema.
   Map<String, dynamic> toJson() => {
         'mode': mode,
         'configuration': configuration,
@@ -172,6 +230,7 @@ final class BenchmarkModeReport {
         'accuracy': accuracy,
       };
 
+  /// Decodes a mode report from the benchmark report JSON schema.
   factory BenchmarkModeReport.fromJson(Map<String, dynamic> json) =>
       BenchmarkModeReport(
         mode: json['mode'] as String,
@@ -196,7 +255,9 @@ final class BenchmarkModeReport {
       );
 }
 
+/// Serializable benchmark report for a model, audio input, and environment.
 final class WhisperBenchmarkReport {
+  /// Creates a complete benchmark report.
   const WhisperBenchmarkReport({
     required this.schemaVersion,
     required this.createdAtUtc,
@@ -208,15 +269,31 @@ final class WhisperBenchmarkReport {
     required this.modes,
   });
 
+  /// Version of the benchmark JSON schema.
   final int schemaVersion;
+
+  /// UTC time at which the report was created.
   final DateTime createdAtUtc;
+
+  /// Device, operating-system, and native runtime metadata.
   final Map<String, dynamic> environment;
+
+  /// Model identity and metadata.
   final Map<String, dynamic> model;
+
+  /// Input audio identity and duration metadata.
   final Map<String, dynamic> audio;
+
+  /// Settings shared across benchmark modes.
   final Map<String, dynamic> benchmarkConfiguration;
+
+  /// Model loading time in microseconds.
   final int modelLoadMicroseconds;
+
+  /// Results for each tested performance mode.
   final List<BenchmarkModeReport> modes;
 
+  /// Converts this report to its JSON-compatible map representation.
   Map<String, dynamic> toJson() => {
         'schema_version': schemaVersion,
         'created_at_utc': createdAtUtc.toUtc().toIso8601String(),
@@ -228,10 +305,12 @@ final class WhisperBenchmarkReport {
         'modes': modes.map((value) => value.toJson()).toList(),
       };
 
+  /// Encodes this report as JSON, optionally with indentation when [pretty].
   String encode({bool pretty = false}) =>
       (pretty ? const JsonEncoder.withIndent('  ') : const JsonEncoder())
           .convert(toJson());
 
+  /// Decodes a report from its JSON-compatible map representation.
   factory WhisperBenchmarkReport.fromJson(Map<String, dynamic> json) =>
       WhisperBenchmarkReport(
         schemaVersion: json['schema_version'] as int,
@@ -249,11 +328,16 @@ final class WhisperBenchmarkReport {
             .toList(growable: false),
       );
 
+  /// Decodes a report from a JSON [source] string.
   factory WhisperBenchmarkReport.decode(String source) =>
       WhisperBenchmarkReport.fromJson(
         (jsonDecode(source) as Map).cast<String, dynamic>(),
       );
 
+  /// Validates report structure, metrics, accuracy, and mode consistency.
+  ///
+  /// Throws [StateError] on the first invalid value. [expectedModes] and
+  /// [expectedIterations] describe the benchmark run that must be present.
   void validate({
     Set<String> expectedModes = const {
       'responsive',

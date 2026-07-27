@@ -60,6 +60,7 @@ final class _TranscriptionInvocation {
   }
 }
 
+/// Handle for one asynchronous transcription job.
 final class WhisperTask {
   WhisperTask._(this._job, this.result) {
     _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
@@ -77,13 +78,25 @@ final class WhisperTask {
         onError: (Object _, StackTrace __) => done());
   }
   final Pointer<Void> _job;
+
+  /// Completes with the transcription or with the native processing error.
   final Future<WhisperResult> result;
   final _progress = StreamController<int>.broadcast();
   late final Timer _timer;
+
+  /// Distinct native progress percentages from 0 through 100.
   Stream<int> get progress => _progress.stream.distinct();
+
+  /// Requests cooperative cancellation of the native job.
+  ///
+  /// The [result] future subsequently completes with a [WhisperException].
   void cancel() => NativeBindings.instance.cancel(_job);
 }
 
+/// A loaded whisper.cpp model context used to run transcription jobs.
+///
+/// An engine accepts one transcription at a time. Call [dispose] after all jobs
+/// and streaming tasks have completed.
 final class WhisperEngine {
   WhisperEngine._(this._context);
   final Pointer<Void> _context;
@@ -91,9 +104,17 @@ final class WhisperEngine {
   int _activeJobs = 0;
   bool _streamReserved = false;
 
+  /// Version string reported by the linked whisper.cpp library.
   static String get version => NativeBindings.instance.version().toDartString();
+
+  /// Native backend and hardware information reported by whisper.cpp.
   static String get systemInfo =>
       NativeBindings.instance.systemInfo().toDartString();
+
+  /// Runs whisper.cpp's low-level memory and matrix benchmarks.
+  ///
+  /// [threads] controls CPU concurrency. The returned keys are supplied by the
+  /// native library and include textual benchmark measurements.
   static Map<String, dynamic> benchmark({int threads = 4}) {
     final n = NativeBindings.instance, out = n.benchmark(threads);
     try {
@@ -103,6 +124,9 @@ final class WhisperEngine {
     }
   }
 
+  /// Metadata describing the model loaded into this engine.
+  ///
+  /// Throws [WhisperException] after [dispose].
   Map<String, dynamic> get modelInfo {
     if (_disposed) throw const WhisperException('Engine is disposed');
     final n = NativeBindings.instance, out = n.modelInfo(_context);
@@ -114,6 +138,9 @@ final class WhisperEngine {
     }
   }
 
+  /// Converts [text] into model vocabulary token identifiers.
+  ///
+  /// Throws [WhisperException] after [dispose] or if native tokenization fails.
   List<int> tokenize(String text) {
     if (_disposed) throw const WhisperException('Engine is disposed');
     final n = NativeBindings.instance, input = text.toNativeUtf8();
@@ -145,6 +172,11 @@ final class WhisperEngine {
     return WhisperEngine._(Pointer<Void>.fromAddress(address));
   }
 
+  /// Starts transcription of mono 16 kHz floating-point [pcm16k].
+  ///
+  /// The returned task provides progress and cancellation. Starting another
+  /// job or stream on this engine before it completes throws a
+  /// [WhisperException].
   WhisperTask transcribe(Float32List pcm16k,
       {TranscribeOptions options = const TranscribeOptions()}) {
     if (_streamReserved) {
@@ -155,6 +187,10 @@ final class WhisperEngine {
   }
 
   /// Continuously transcribes an arbitrary stream of mono PCM chunks.
+  ///
+  /// Chunk sample rates are resampled to 16 kHz when necessary, but may not
+  /// change during a stream. The engine remains reserved until the returned
+  /// task is stopped, cancelled, completed, or failed.
   WhisperStreamTask transcribeStream(
     Stream<RecordingChunk> audio, {
     TranscribeOptions options = const TranscribeOptions(),
@@ -164,6 +200,9 @@ final class WhisperEngine {
   }
 
   /// Requests microphone permission and starts live transcription in one call.
+  ///
+  /// Throws [WhisperException] if permission is denied. Stopping or cancelling
+  /// the returned task also stops the owned microphone recorder.
   Future<WhisperStreamTask> transcribeMicrophone({
     TranscribeOptions options = const TranscribeOptions(),
     WhisperStreamConfig config = const WhisperStreamConfig(),
@@ -330,6 +369,10 @@ final class WhisperEngine {
     return WhisperTask._(job, future);
   }
 
+  /// Releases the native model context.
+  ///
+  /// Disposal is idempotent after the first successful call. It throws a
+  /// [WhisperException] while a transcription or stream is active.
   void dispose() {
     if (_activeJobs > 0 || _streamReserved) {
       throw const WhisperException(

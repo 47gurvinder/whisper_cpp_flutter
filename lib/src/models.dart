@@ -1,35 +1,89 @@
 import 'dart:typed_data';
 
-enum WhisperSamplingStrategy { greedy, beamSearch }
+/// Decoding algorithm used to select transcription tokens.
+enum WhisperSamplingStrategy {
+  /// Selects locally best candidates with optional repeated attempts.
+  greedy,
+
+  /// Searches multiple candidate sequences using a beam.
+  beamSearch,
+}
 
 /// Reusable offline transcription profiles with different performance goals.
-enum WhisperPerformanceMode { responsive, balanced, efficient }
+enum WhisperPerformanceMode {
+  /// Prioritizes lower latency with fewer decoding candidates.
+  responsive,
 
-enum WhisperLogLevel { none, error, warning, info, debug, trace }
+  /// Balances decoding quality and computation.
+  balanced,
+
+  /// Reduces decoding work and CPU concurrency.
+  efficient,
+}
+
+/// Verbosity of native whisper.cpp diagnostic logging.
+enum WhisperLogLevel {
+  /// Disables native diagnostic logging.
+  none,
+
+  /// Reports errors only.
+  error,
+
+  /// Reports warnings and errors.
+  warning,
+
+  /// Reports general informational messages.
+  info,
+
+  /// Reports detailed debugging messages.
+  debug,
+
+  /// Reports the most detailed tracing messages.
+  trace,
+}
 
 const _copyWithUnset = Object();
 
+/// An error reported by the Dart wrapper or native whisper.cpp runtime.
 final class WhisperException implements Exception {
+  /// Creates an exception with a human-readable [message].
   const WhisperException(this.message);
+
+  /// Description of the failure.
   final String message;
+
   @override
   String toString() => 'WhisperException: $message';
 }
 
+/// Native model-loading options.
 final class WhisperConfig {
+  /// Creates model-loading options.
   const WhisperConfig({
     this.useGpu = true,
     this.useFlashAttention = true,
     this.useDtw = false,
     this.dtwModel = 0,
   });
+
+  /// Whether supported GPU acceleration should be enabled.
   final bool useGpu;
+
+  /// Whether flash attention should be enabled when supported.
   final bool useFlashAttention;
+
+  /// Whether dynamic-time-warping token timestamps should be enabled.
   final bool useDtw;
+
+  /// whisper.cpp alignment-head preset used when [useDtw] is enabled.
   final int dtwModel;
 }
 
+/// Options controlling a transcription job.
+///
+/// Defaults follow whisper.cpp's general-purpose decoding configuration.
 final class TranscribeOptions {
+  /// Creates transcription options.
   const TranscribeOptions({
     this.strategy = WhisperSamplingStrategy.greedy,
     this.threads = 4,
@@ -76,7 +130,15 @@ final class TranscribeOptions {
     this.vadSpeechPadMs = 30,
     this.vadSamplesOverlap = 0.1,
   });
+
+  /// Token decoding strategy.
   final WhisperSamplingStrategy strategy;
+
+  /// Integer-valued decoding and VAD settings.
+  ///
+  /// Time values whose names end in `Ms` are expressed in milliseconds.
+  /// A zero duration or limit asks whisper.cpp to use the available input or
+  /// its native default.
   final int threads,
       offsetMs,
       durationMs,
@@ -89,7 +151,11 @@ final class TranscribeOptions {
       vadMinSpeechMs,
       vadMinSilenceMs,
       vadSpeechPadMs;
+
+  /// Language code to transcribe, or `auto` for automatic selection.
   final String language;
+
+  /// Boolean decoding, timestamp, debugging, and VAD switches.
   final bool translate,
       detectLanguage,
       tokenTimestamps,
@@ -104,7 +170,14 @@ final class TranscribeOptions {
       debugMode,
       carryInitialPrompt,
       enableVad;
+
+  /// Optional prompt, suppression expression, and VAD model path.
   final String? initialPrompt, suppressRegex, vadModelPath;
+
+  /// Floating-point decoding thresholds and VAD settings.
+  ///
+  /// [vadMaxSpeechSeconds] is measured in seconds; the other VAD duration
+  /// fields are represented by their explicitly named integer properties.
   final double temperature,
       temperatureIncrement,
       entropyThreshold,
@@ -119,6 +192,11 @@ final class TranscribeOptions {
       vadMaxSpeechSeconds,
       vadSamplesOverlap;
 
+  /// Returns a copy with the supplied values replacing existing settings.
+  ///
+  /// Passing `null` for [initialPrompt], [suppressRegex], or [vadModelPath]
+  /// explicitly clears that value. Omitting one of those arguments preserves
+  /// the current value.
   TranscribeOptions copyWith({
     WhisperSamplingStrategy? strategy,
     int? threads,
@@ -251,7 +329,9 @@ final class TranscribeOptions {
   }
 }
 
+/// A decoded whisper.cpp token and its timing/probability metadata.
 final class WhisperToken {
+  /// Creates a decoded token.
   const WhisperToken(
       {required this.id,
       required this.text,
@@ -263,12 +343,26 @@ final class WhisperToken {
       required this.timestampProbabilitySum,
       required this.dtwTimestamp,
       required this.voiceLength});
+
+  /// Native whisper.cpp token identifier.
   final int id;
+
+  /// Decoded text represented by this token.
   final String text;
+
+  /// Start and end offsets within the input audio.
   final Duration start, end;
+
+  /// Token probability and log probability.
   final double probability, logProbability;
+
+  /// Timestamp probabilities and voice-length metadata.
   final double timestampProbability, timestampProbabilitySum, voiceLength;
+
+  /// Dynamic-time-warping timestamp, or a negative duration when unavailable.
   final Duration dtwTimestamp;
+
+  /// Decodes a token from the native bridge JSON representation.
   factory WhisperToken.fromJson(Map<String, dynamic> j) => WhisperToken(
       id: j['id'],
       text: j['text'],
@@ -282,7 +376,9 @@ final class WhisperToken {
       voiceLength: (j['vlen'] as num).toDouble());
 }
 
+/// A contiguous transcription segment.
 final class WhisperSegment {
+  /// Creates a transcription segment.
   const WhisperSegment(
       {required this.text,
       required this.start,
@@ -290,11 +386,23 @@ final class WhisperSegment {
       required this.tokens,
       required this.noSpeechProbability,
       required this.speakerTurnNext});
+
+  /// Transcribed text in this segment.
   final String text;
+
+  /// Start and end offsets within the input audio.
   final Duration start, end;
+
+  /// Tokens decoded for this segment.
   final List<WhisperToken> tokens;
+
+  /// Estimated probability that the segment contains no speech.
   final double noSpeechProbability;
+
+  /// Whether whisper.cpp detected a speaker turn after this segment.
   final bool speakerTurnNext;
+
+  /// Decodes a segment from the native bridge JSON representation.
   factory WhisperSegment.fromJson(Map<String, dynamic> j) => WhisperSegment(
       text: j['text'],
       start: Duration(milliseconds: j['t0']),
@@ -305,7 +413,9 @@ final class WhisperSegment {
       speakerTurnNext: j['speaker_turn_next']);
 }
 
+/// Completed transcription output.
 final class WhisperResult {
+  /// Creates a transcription result.
   const WhisperResult(
       {required this.text,
       required this.language,
@@ -313,10 +423,20 @@ final class WhisperResult {
       required this.segments,
       required this.processingTime,
       required this.systemInfo});
+
+  /// Full text, detected language, and native system description.
   final String text, language, systemInfo;
+
+  /// Confidence assigned to [language], or a negative value when unavailable.
   final double languageProbability;
+
+  /// Time-ordered transcription segments.
   final List<WhisperSegment> segments;
+
+  /// Native processing time, excluding Dart isolate and transfer overhead.
   final Duration processingTime;
+
+  /// Decodes a result from the native bridge JSON representation.
   factory WhisperResult.fromJson(Map<String, dynamic> j) => WhisperResult(
       text: j['text'],
       language: j['language'],
@@ -328,13 +448,23 @@ final class WhisperResult {
       systemInfo: j['system_info']);
 }
 
+/// A speech interval returned by voice activity detection.
 final class VadSegment {
+  /// Creates an interval from inclusive [start] to exclusive [end].
   const VadSegment(this.start, this.end);
+
+  /// Start and end offsets within the analyzed audio.
   final Duration start, end;
 }
 
+/// A chunk of mono floating-point PCM audio.
 final class RecordingChunk {
+  /// Creates a chunk with [samples] recorded at [sampleRate] hertz.
   const RecordingChunk(this.samples, this.sampleRate);
+
+  /// Normalized mono PCM samples, conventionally in the range -1 to 1.
   final Float32List samples;
+
+  /// Number of samples per second.
   final int sampleRate;
 }

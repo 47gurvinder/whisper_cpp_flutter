@@ -7,6 +7,9 @@ import 'models.dart';
 
 /// Captures mono floating-point PCM from the device microphone.
 final class WhisperRecorder {
+  /// Creates an idle microphone recorder.
+  WhisperRecorder();
+
   static const _methods = MethodChannel('whisper_cpp_flutter/recorder');
   static const _audio = EventChannel('whisper_cpp_flutter/audio');
   static WhisperRecorder? _activeRecorder;
@@ -15,9 +18,17 @@ final class WhisperRecorder {
   StreamSubscription<dynamic>? _nativeSubscription;
   bool _stopping = false;
 
+  /// Requests microphone access from the current platform.
+  ///
+  /// Returns whether access is available after the platform prompt completes.
   Future<bool> requestPermission() async =>
       await _methods.invokeMethod<bool>('requestPermission') ?? false;
 
+  /// Starts recording mono floating-point PCM.
+  ///
+  /// [sampleRate] is measured in hertz and [chunkMilliseconds] controls the
+  /// requested native delivery interval. Only one recorder may be active at a
+  /// time. Call [stop] when the returned stream is no longer needed.
   Future<Stream<RecordingChunk>> start({
     int sampleRate = 16000,
     int chunkMilliseconds = 100,
@@ -74,6 +85,9 @@ final class WhisperRecorder {
     }
   }
 
+  /// Stops recording and closes the stream returned by [start].
+  ///
+  /// Calling this on an idle or already stopped recorder is safe.
   Future<void> stop() async {
     if (_controller == null || _stopping) return;
     _stopping = true;

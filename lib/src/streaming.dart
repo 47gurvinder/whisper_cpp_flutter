@@ -7,16 +7,26 @@ import 'models.dart';
 /// Controls how often live audio is decoded and how long text remains
 /// provisional before it can be confirmed.
 final class WhisperStreamConfig {
+  /// Creates live transcription timing configuration.
   const WhisperStreamConfig({
     this.updateInterval = const Duration(seconds: 2),
     this.windowDuration = const Duration(seconds: 30),
     this.confirmationLag = const Duration(seconds: 4),
   });
 
+  /// Minimum audio duration accumulated between inference passes.
   final Duration updateInterval;
+
+  /// Maximum audio duration decoded by a single inference pass.
   final Duration windowDuration;
+
+  /// Recent audio duration retained as provisional before confirmation.
   final Duration confirmationLag;
 
+  /// Validates relationships between the configured durations.
+  ///
+  /// Throws [ArgumentError] when a duration is negative, zero where forbidden,
+  /// or incompatible with the window duration.
   void validate() {
     if (updateInterval <= Duration.zero) {
       throw ArgumentError.value(
@@ -39,6 +49,7 @@ final class WhisperStreamConfig {
 
 /// A display-ready snapshot of a live transcription.
 final class WhisperStreamUpdate {
+  /// Creates an immutable streaming transcription snapshot.
   const WhisperStreamUpdate({
     required this.confirmedText,
     required this.partialText,
@@ -48,13 +59,25 @@ final class WhisperStreamUpdate {
     required this.isFinal,
   });
 
+  /// Stable text that later updates will preserve.
   final String confirmedText;
+
+  /// Provisional text that a later inference pass may replace.
   final String partialText;
+
+  /// Stable, time-ordered segments.
   final List<WhisperSegment> confirmedSegments;
+
+  /// Provisional segments that a later update may replace.
   final List<WhisperSegment> partialSegments;
+
+  /// Total input audio duration received so far.
   final Duration audioDuration;
+
+  /// Whether this is the terminal successful update.
   final bool isFinal;
 
+  /// Combined [confirmedText] and [partialText] for display.
   String get text => '$confirmedText$partialText';
 }
 
@@ -86,6 +109,10 @@ final class WhisperStreamTask {
     );
   }
 
+  /// Creates a streaming task around an audio source and inference callback.
+  ///
+  /// This lower-level entry point is useful for custom engines and tests.
+  /// [releaseEngine] is called exactly once when the task terminates.
   static WhisperStreamTask start({
     required Stream<RecordingChunk> audio,
     required WhisperStreamConfig config,
@@ -135,14 +162,23 @@ final class WhisperStreamTask {
   bool _cancelled = false;
   bool _released = false;
 
+  /// Non-final and terminal snapshots emitted by the transcription.
   Stream<WhisperStreamUpdate> get updates => _updates.stream;
+
+  /// Completes with the final snapshot, or with the source/inference error.
   Future<WhisperStreamUpdate> get result => _result.future;
 
+  /// Stops the source, performs final inference, and returns the final update.
+  ///
+  /// Repeated calls share the same completion result.
   Future<WhisperStreamUpdate> stop() async {
     await _finish();
     return result;
   }
 
+  /// Cancels source collection and active inference.
+  ///
+  /// [result] and [updates] terminate with a [WhisperException].
   Future<void> cancel() async {
     if (_result.isCompleted) return;
     _cancelled = true;

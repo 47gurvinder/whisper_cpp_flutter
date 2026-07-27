@@ -1,7 +1,10 @@
-import Flutter
-import UIKit
 import AVFoundation
 import Darwin
+import Flutter
+import UIKit
+#if SWIFT_PACKAGE
+import WhisperCppFlutterBridge
+#endif
 
 public final class WhisperCppFlutterPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var sink: FlutterEventSink?
@@ -9,6 +12,11 @@ public final class WhisperCppFlutterPlugin: NSObject, FlutterPlugin, FlutterStre
   private var tapInstalled = false
 
   public static func register(with registrar: FlutterPluginRegistrar) {
+#if SWIFT_PACKAGE
+    // Keep the native target linked so Dart FFI can resolve its wf_* symbols.
+    _ = wf_version()
+#endif
+
     let instance = WhisperCppFlutterPlugin()
     registrar.addMethodCallDelegate(instance, channel: FlutterMethodChannel(name: "whisper_cpp_flutter/recorder", binaryMessenger: registrar.messenger()))
     FlutterEventChannel(name: "whisper_cpp_flutter/audio", binaryMessenger: registrar.messenger()).setStreamHandler(instance)

@@ -1,0 +1,3 @@
+# Cover Image Prompt
+
+Create a premium, modern 4:3 Upwork portfolio cover for a Flutter mobile plugin that performs private offline AI speech-to-text on Android and iOS. Use a deep navy-to-indigo studio background with cyan and violet glow. Show a polished generic smartphone with a clean transcription interface, audio waveform, abstract transcript lines, and tasteful symbols for on-device AI, privacy, and mobile capability. Use a high-end 3D software case-study aesthetic with generous negative space. Render exactly: “OFFLINE AI SPEECH-TO-TEXT” and “Flutter • Android • iOS”. Keep the design readable, uncluttered, and free of watermarks or company names.
