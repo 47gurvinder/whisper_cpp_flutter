@@ -422,6 +422,7 @@ class _TranscriptionPageState extends State<TranscriptionPage> {
   void dispose() {
     final engine = _engine;
     final streamTask = _streamTask;
+    _modelManager.close();
     unawaited(_recordingSubscription?.cancel());
     unawaited(_progressSubscription?.cancel());
     unawaited(_streamSubscription?.cancel());

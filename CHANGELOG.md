@@ -2,6 +2,21 @@
 
 All notable changes to `whisper_cpp_flutter_plus` are documented in this file.
 
+## 0.4.0 - 2026-07-30
+
+### Added
+
+- Added plain text, JSON, SRT, and WebVTT transcription result exports.
+- Added cancellable sequential PCM/WAV batch transcription that reuses one
+  loaded engine and can optionally capture per-item failures.
+- Added a curated model catalog with immutable upstream revisions, SHA-256
+  verification, and catalog-aware model downloads.
+
+### Changed
+
+- Hardened managed model paths, made HTTPS the download default, and added
+  explicit model-manager client cleanup.
+
 ## 0.3.0 - 2026-07-27
 
 ### Added

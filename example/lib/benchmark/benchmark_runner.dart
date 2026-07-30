@@ -161,20 +161,26 @@ final class WhisperBenchmarkRunner {
   }) async {
     controller._check();
     final manager = WhisperModelManager();
-    final cached = await manager.find(modelName);
-    controller._check();
-    if (cached != null) return cached;
-    onProgress?.call('Downloading $modelName outside measured time…', null);
-    await for (final progress in manager.download(modelUrl, modelName)) {
+    try {
+      final cached = await manager.find(modelName);
       controller._check();
-      onProgress?.call(
-        'Downloading $modelName outside measured time…',
-        progress.fraction,
-      );
+      if (cached != null) return cached;
+      onProgress?.call('Downloading $modelName outside measured time…', null);
+      await for (final progress in manager.download(modelUrl, modelName)) {
+        controller._check();
+        onProgress?.call(
+          'Downloading $modelName outside measured time…',
+          progress.fraction,
+        );
+      }
+      final downloaded = await manager.find(modelName);
+      if (downloaded == null) {
+        throw StateError('Downloaded model was not found.');
+      }
+      return downloaded;
+    } finally {
+      manager.close();
     }
-    final downloaded = await manager.find(modelName);
-    if (downloaded == null) throw StateError('Downloaded model was not found');
-    return downloaded;
   }
 
   Future<WhisperBenchmarkReport> run({

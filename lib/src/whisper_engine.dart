@@ -4,6 +4,7 @@ import 'dart:ffi';
 import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
+import 'batch.dart';
 import 'models.dart';
 import 'native_bindings.dart';
 import 'recorder.dart';
@@ -103,6 +104,7 @@ final class WhisperEngine {
   bool _disposed = false;
   int _activeJobs = 0;
   bool _streamReserved = false;
+  bool _batchReserved = false;
 
   /// Version string reported by the linked whisper.cpp library.
   static String get version => NativeBindings.instance.version().toDartString();
@@ -179,11 +181,45 @@ final class WhisperEngine {
   /// [WhisperException].
   WhisperTask transcribe(Float32List pcm16k,
       {TranscribeOptions options = const TranscribeOptions()}) {
-    if (_streamReserved) {
+    if (_streamReserved || _batchReserved) {
       throw const WhisperException(
-          'This engine is reserved by an active streaming transcription');
+          'This engine is reserved by an active transcription task');
     }
     return _transcribeInternal(pcm16k, options: options);
+  }
+
+  /// Transcribes [inputs] sequentially while reusing this loaded engine.
+  ///
+  /// By default the first loading or inference error terminates the batch.
+  /// Set [continueOnError] to capture item failures and continue. Starting
+  /// another job or stream on this engine before the batch completes throws a
+  /// [WhisperException].
+  WhisperBatchTask transcribeBatch(
+    List<WhisperBatchInput> inputs, {
+    TranscribeOptions defaultOptions = const TranscribeOptions(),
+    bool continueOnError = false,
+  }) {
+    _reserveBatch();
+    WhisperTask? activeInference;
+    try {
+      return WhisperBatchTask.start(
+        inputs: inputs,
+        defaultOptions: defaultOptions,
+        continueOnError: continueOnError,
+        startInference: (samples, options) {
+          final task = _transcribeInternal(samples, options: options);
+          activeInference = task;
+          return task.result.whenComplete(() {
+            if (identical(activeInference, task)) activeInference = null;
+          });
+        },
+        cancelInference: () => activeInference?.cancel(),
+        releaseEngine: () => _batchReserved = false,
+      );
+    } catch (_) {
+      _batchReserved = false;
+      rethrow;
+    }
   }
 
   /// Continuously transcribes an arbitrary stream of mono PCM chunks.
@@ -265,12 +301,21 @@ final class WhisperEngine {
 
   void _reserveStream(WhisperStreamConfig config) {
     if (_disposed) throw const WhisperException('Engine is disposed');
-    if (_activeJobs > 0 || _streamReserved) {
+    if (_activeJobs > 0 || _streamReserved || _batchReserved) {
       throw const WhisperException(
           'This engine already has an active transcription job');
     }
     config.validate();
     _streamReserved = true;
+  }
+
+  void _reserveBatch() {
+    if (_disposed) throw const WhisperException('Engine is disposed');
+    if (_activeJobs > 0 || _streamReserved || _batchReserved) {
+      throw const WhisperException(
+          'This engine already has an active transcription job');
+    }
+    _batchReserved = true;
   }
 
   WhisperTask _transcribeInternal(
@@ -374,7 +419,7 @@ final class WhisperEngine {
   /// Disposal is idempotent after the first successful call. It throws a
   /// [WhisperException] while a transcription or stream is active.
   void dispose() {
-    if (_activeJobs > 0 || _streamReserved) {
+    if (_activeJobs > 0 || _streamReserved || _batchReserved) {
       throw const WhisperException(
           'Cannot dispose an engine while transcription is running');
     }

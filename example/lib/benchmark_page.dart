@@ -66,9 +66,14 @@ class _BenchmarkPageState extends State<BenchmarkPage> {
         controller: _controller!,
         onProgress: _update,
       );
-      final directory = Directory(
-        '${(await WhisperModelManager().directory).path}/benchmarks',
-      );
+      final modelManager = WhisperModelManager();
+      late final Directory modelDirectory;
+      try {
+        modelDirectory = await modelManager.directory;
+      } finally {
+        modelManager.close();
+      }
+      final directory = Directory('${modelDirectory.path}/benchmarks');
       await directory.create(recursive: true);
       final safeTime = report.createdAtUtc
           .toIso8601String()

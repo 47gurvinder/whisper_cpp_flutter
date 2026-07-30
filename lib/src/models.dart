@@ -374,6 +374,20 @@ final class WhisperToken {
       timestampProbabilitySum: (j['ptsum'] as num).toDouble(),
       dtwTimestamp: Duration(milliseconds: j['t_dtw']),
       voiceLength: (j['vlen'] as num).toDouble());
+
+  /// Encodes this token using the native bridge JSON schema.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'text': text,
+        't0': start.inMilliseconds,
+        't1': end.inMilliseconds,
+        'p': probability,
+        'plog': logProbability,
+        'pt': timestampProbability,
+        'ptsum': timestampProbabilitySum,
+        't_dtw': dtwTimestamp.inMilliseconds,
+        'vlen': voiceLength,
+      };
 }
 
 /// A contiguous transcription segment.
@@ -411,6 +425,19 @@ final class WhisperSegment {
           (j['tokens'] as List).map((e) => WhisperToken.fromJson(e)).toList(),
       noSpeechProbability: (j['no_speech_p'] as num).toDouble(),
       speakerTurnNext: j['speaker_turn_next']);
+
+  /// Encodes this segment using the native bridge JSON schema.
+  ///
+  /// Token metadata can be omitted when a smaller export is preferred.
+  Map<String, dynamic> toJson({bool includeTokens = true}) => {
+        'text': text,
+        't0': start.inMilliseconds,
+        't1': end.inMilliseconds,
+        if (includeTokens)
+          'tokens': tokens.map((token) => token.toJson()).toList(),
+        'no_speech_p': noSpeechProbability,
+        'speaker_turn_next': speakerTurnNext,
+      };
 }
 
 /// Completed transcription output.
@@ -446,6 +473,20 @@ final class WhisperResult {
           .toList(),
       processingTime: Duration(microseconds: j['processing_us']),
       systemInfo: j['system_info']);
+
+  /// Encodes this result using the native bridge JSON schema.
+  ///
+  /// Token metadata can be omitted when a smaller export is preferred.
+  Map<String, dynamic> toJson({bool includeTokens = true}) => {
+        'text': text,
+        'language': language,
+        'language_probability': languageProbability,
+        'segments': segments
+            .map((segment) => segment.toJson(includeTokens: includeTokens))
+            .toList(),
+        'processing_us': processingTime.inMicroseconds,
+        'system_info': systemInfo,
+      };
 }
 
 /// A speech interval returned by voice activity detection.

@@ -226,6 +226,7 @@ class _DiarizationPageState extends State<DiarizationPage> {
   @override
   void dispose() {
     final engine = _engine;
+    _modelManager.close();
     unawaited(_recordingSubscription?.cancel());
     unawaited(_progressSubscription?.cancel());
     if (_isRecording) unawaited(_recorder.stop());

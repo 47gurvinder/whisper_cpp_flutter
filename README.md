@@ -29,7 +29,9 @@ Silero voice activity detection, and private on-device speaker-turn detection.
 - Windowed streaming for any mono PCM source
 - WAV decoding, channel mixing, and sample-rate conversion
 - Integrated and standalone Silero VAD, including continuous VAD
-- Resumable model downloads, SHA-256 verification, listing, and deletion
+- Resumable model downloads, a checksum-pinned catalog, listing, and deletion
+- Sequential PCM/WAV batches that reuse one loaded model
+- Plain text, JSON, SRT, and WebVTT result export
 - Android CPU acceleration for ARM64 and ARMv7
 - iOS Accelerate, Metal, and optional Core ML encoder acceleration
 
@@ -68,6 +70,10 @@ starts.
 
 ### iOS
 
+The plugin supports both CocoaPods and Flutter's Swift Package Manager
+integration. Flutter selects the dependency manager configured by the
+application; no native package dependency needs to be added manually.
+
 Add a microphone usage description to your application's `Info.plist`:
 
 ```xml
@@ -95,8 +101,8 @@ the model available until `engine.dispose()` is called.
 ### Optional model manager
 
 `WhisperModelManager` can download and manage models in the application support
-directory. It accepts any HTTP or HTTPS URL; Hugging Face is only one possible
-source.
+directory. It accepts any HTTPS URL; Hugging Face is only one possible source.
+Plain HTTP requires an explicit insecure opt-in.
 
 ```dart
 final models = WhisperModelManager();
@@ -122,6 +128,33 @@ final engine = await WhisperEngine.load(model.path);
 
 Supplying `sha256Hex` is recommended when the expected checksum is known.
 
+### Verified model catalog
+
+The curated catalog pins both immutable upstream revisions and SHA-256 hashes
+for common mobile Whisper, Silero VAD, and TinyDiarize models:
+
+```dart
+final models = WhisperModelManager();
+final descriptor = WhisperModelCatalog.tinyEnglish;
+
+final cached = await models.findCatalogModel(descriptor);
+if (cached == null) {
+  await for (final progress in models.downloadCatalogModel(descriptor)) {
+    print(progress.fraction);
+  }
+}
+
+final verified = await models.findCatalogModel(descriptor);
+if (verified == null) throw StateError('Model was not installed.');
+final engine = await WhisperEngine.load(verified.path);
+```
+
+Catalog lookup verifies an existing cached file before returning it. A mismatch
+throws `FormatException` and leaves the file in place for application-directed
+cleanup. Arbitrary downloads require HTTPS unless `allowInsecureHttp: true` is
+explicitly supplied. Call `models.close()` when a manager that owns its HTTP
+client is no longer needed.
+
 ## Transcribe a WAV file
 
 `WhisperAudio.readWav()` converts supported WAV input to the mono 16 kHz
@@ -144,6 +177,56 @@ print(result.text);
 ```
 
 Call `task.cancel()` to stop active inference.
+
+### Export a result
+
+Completed results can be exported without writing files:
+
+```dart
+final result = await engine.transcribe(samples).result;
+final plainText = result.toPlainText();
+final json = result.toJsonString();
+final compactJson = result.toJsonString(includeTokens: false);
+final srt = result.toSrt();
+final webVtt = result.toVtt();
+```
+
+SRT and WebVTT cues use native Whisper segment timestamps. Detailed token
+metadata is included in JSON by default.
+
+### Transcribe a batch
+
+A batch accepts prepared PCM and WAV files, processes them sequentially, and
+reuses the engine's already-loaded model:
+
+```dart
+final batch = engine.transcribeBatch(
+  [
+    WhisperWavBatchInput('interview', File('/path/interview.wav')),
+    WhisperPcmBatchInput('memo', memoSamples),
+  ],
+  defaultOptions: const TranscribeOptions(language: 'en'),
+  continueOnError: true,
+);
+
+batch.updates.listen((progress) {
+  print('${progress.completed}/${progress.total}: ${progress.currentId}');
+});
+
+final items = await batch.result;
+for (final item in items) {
+  if (item.isSuccess) {
+    print('${item.input.id}: ${item.result!.text}');
+  } else {
+    print('${item.input.id} failed: ${item.error}');
+  }
+}
+```
+
+The default stops on the first loading or inference error. With
+`continueOnError: true`, failures are captured in their ordered item results.
+Call `batch.cancel()` to cancel active native inference and skip remaining
+items. Use separate engine instances when parallel inference is required.
 
 ### Offline performance modes
 

@@ -2,6 +2,9 @@
 library;
 
 export 'src/models.dart';
+export 'src/result_export.dart';
+export 'src/batch.dart';
+export 'src/model_catalog.dart';
 export 'src/model_manager.dart';
 export 'src/recorder.dart';
 export 'src/whisper_engine.dart';

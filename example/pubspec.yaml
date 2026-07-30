@@ -28,7 +28,7 @@ dev_dependencies:
 
 flutter:
   config:
-    enable-swift-package-manager: false
+    enable-swift-package-manager: true
   uses-material-design: true
   assets:
     - assets/benchmark/jfk.wav
