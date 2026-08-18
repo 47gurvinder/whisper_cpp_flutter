@@ -2,6 +2,15 @@
 
 All notable changes to `whisper_cpp_flutter_plus` are documented in this file.
 
+## 0.4.1 - 2026-08-18
+
+### Changed
+
+- Updated the bundled whisper.cpp core from v1.9.1 to v1.9.2, including ggml
+  0.18.1 and upstream CJK voice-length improvements.
+- Mapped token timestamps back to the original input-audio timeline when
+  integrated VAD removes silence.
+
 ## 0.4.0 - 2026-07-30
 
 ### Added

@@ -1,6 +1,6 @@
 # whisper_cpp_flutter_plus
 
-Run private, offline speech-to-text in Flutter with `whisper.cpp` v1.9.1.
+Run private, offline speech-to-text in Flutter with `whisper.cpp` v1.9.2.
 This plugin provides native Android and iOS bindings for transcription,
 translation, microphone capture, streaming results, model management, and
 voice activity detection (VAD). Audio stays on the device after a model has
@@ -36,7 +36,7 @@ Silero voice activity detection, and private on-device speaker-turn detection.
 - iOS Accelerate, Metal, and optional Core ML encoder acceleration
 
 The package vendors the upstream source revision associated with stable
-`whisper.cpp` v1.9.1. Whisper and Silero model files are not bundled.
+`whisper.cpp` v1.9.2. Whisper and Silero model files are not bundled.
 
 ## Supported platforms
 

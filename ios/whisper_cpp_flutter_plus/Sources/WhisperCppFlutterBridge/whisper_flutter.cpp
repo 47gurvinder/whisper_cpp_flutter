@@ -87,7 +87,7 @@ char * wf_run(void *c,void *jp,const float *samples,int n){auto*ctx=static_cast<
     o<<"{\"text\":\""<<esc(text)<<"\",\"t0\":"<<whisper_full_get_segment_t0(ctx,i)*10<<",\"t1\":"<<whisper_full_get_segment_t1(ctx,i)*10
      <<",\"no_speech_p\":"<<whisper_full_get_segment_no_speech_prob(ctx,i)<<",\"speaker_turn_next\":"<<(whisper_full_get_segment_speaker_turn_next(ctx,i)?"true":"false")<<",\"tokens\":[";
     int nt=whisper_full_n_tokens(ctx,i);for(int t=0;t<nt;t++){if(t)o<<',';auto d=whisper_full_get_token_data(ctx,i,t);
-      o<<"{\"id\":"<<d.id<<",\"text\":\""<<esc(whisper_full_get_token_text(ctx,i,t))<<"\",\"t0\":"<<d.t0*10<<",\"t1\":"<<d.t1*10<<",\"p\":"<<d.p<<",\"plog\":"<<d.plog<<",\"pt\":"<<d.pt<<",\"ptsum\":"<<d.ptsum<<",\"t_dtw\":"<<d.t_dtw*10<<",\"vlen\":"<<d.vlen<<'}';} o<<"]}";
+      o<<"{\"id\":"<<d.id<<",\"text\":\""<<esc(whisper_full_get_token_text(ctx,i,t))<<"\",\"t0\":"<<whisper_full_get_token_t0(ctx,i,t)*10<<",\"t1\":"<<whisper_full_get_token_t1(ctx,i,t)*10<<",\"p\":"<<d.p<<",\"plog\":"<<d.plog<<",\"pt\":"<<d.pt<<",\"ptsum\":"<<d.ptsum<<",\"t_dtw\":"<<d.t_dtw*10<<",\"vlen\":"<<d.vlen<<'}';} o<<"]}";
   }
   auto us=std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-start).count();
   o<<"],\"text\":\""<<esc(full.c_str())<<"\",\"processing_us\":"<<us<<'}'; return copy(o.str());

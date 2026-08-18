@@ -11,8 +11,9 @@ let nativeDefines: [CSetting] = [
     .define("WHISPER_USE_COREML"),
     .define("WHISPER_COREML_ALLOW_FALLBACK"),
     .define("ACCELERATE_NEW_LAPACK"),
-    .define("WHISPER_VERSION", to: "\"1.9.1\""),
-    .define("GGML_VERSION", to: "\"0.15.1\""),
+    .define("ACCELERATE_LAPACK_ILP64"),
+    .define("WHISPER_VERSION", to: "\"1.9.2\""),
+    .define("GGML_VERSION", to: "\"0.18.1\""),
     .define("GGML_COMMIT", to: "\"unknown\""),
 ]
 
@@ -25,8 +26,9 @@ let nativeCxxDefines: [CXXSetting] = [
     .define("WHISPER_USE_COREML"),
     .define("WHISPER_COREML_ALLOW_FALLBACK"),
     .define("ACCELERATE_NEW_LAPACK"),
-    .define("WHISPER_VERSION", to: "\"1.9.1\""),
-    .define("GGML_VERSION", to: "\"0.15.1\""),
+    .define("ACCELERATE_LAPACK_ILP64"),
+    .define("WHISPER_VERSION", to: "\"1.9.2\""),
+    .define("GGML_VERSION", to: "\"0.18.1\""),
     .define("GGML_COMMIT", to: "\"unknown\""),
 ]
 

@@ -2,6 +2,7 @@
 
 // this is a staging header for new llama.cpp API
 // breaking changes and C++ are allowed. everything here should be considered WIP
+// try as much as possible to not include this header in the rest of the codebase
 
 #include "llama.h"
 
@@ -93,6 +94,11 @@ LLAMA_API llama_memory_breakdown llama_get_memory_breakdown(const struct llama_c
 // If masked == true,  output the embeddings only for the tokens with batch.logits != 0
 // If masked == false, output the embeddings for all tokens in the batch regardless of batch.logits
 LLAMA_API void llama_set_embeddings_nextn(struct llama_context * ctx, bool value, bool masked);
+
+// Select which appended NextN block the DECODER_MTP graph runs (offset past
+// the trunk: il = n_layer() + offset). Used by the speculative NextN driver to
+// chain multiple trained NextN heads. Default 0 (first head).
+LLAMA_API void llama_set_nextn_layer_offset(struct llama_context * ctx, int32_t offset);
 
 // mirrors:
 // LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);

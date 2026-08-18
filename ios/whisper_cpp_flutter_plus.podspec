@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'whisper_cpp_flutter_plus'
-  s.version          = '0.1.0'
+  s.version          = '0.4.1'
   s.summary          = 'Flutter bindings for whisper.cpp.'
   s.description      = 'Offline Whisper transcription, translation, VAD and streaming audio capture.'
   s.homepage         = 'https://github.com/47gurvinder/whisper_cpp_flutter'
@@ -15,7 +15,7 @@ Pod::Spec.new do |s|
     'whisper_cpp_flutter_plus/Sources/WhisperCppCore/ggml/src/{ggml.c,ggml.cpp,ggml-alloc.c,ggml-backend.cpp,ggml-backend-dl.cpp,ggml-backend-meta.cpp,ggml-backend-reg.cpp,ggml-opt.cpp,ggml-quants.c,ggml-threading.cpp,gguf.cpp}',
     'whisper_cpp_flutter_plus/Sources/WhisperCppCore/ggml/src/ggml-cpu/{ggml-cpu.c,ggml-cpu.cpp,repack.cpp,hbm.cpp,quants.c,traits.cpp,binary-ops.cpp,unary-ops.cpp,vec.cpp,ops.cpp}',
     'whisper_cpp_flutter_plus/Sources/WhisperCppCore/ggml/src/ggml-cpu/amx/{amx.cpp,mmq.cpp}',
-    'whisper_cpp_flutter_plus/Sources/WhisperCppCore/ggml/src/ggml-cpu/arch/arm/{quants.c,repack.cpp}',
+    'whisper_cpp_flutter_plus/Sources/WhisperCppCore/ggml/spm/*.{c,cpp}',
     'whisper_cpp_flutter_plus/Sources/WhisperCppCore/ggml/src/ggml-blas/ggml-blas.cpp',
     'whisper_cpp_flutter_plus/Sources/WhisperCppCore/ggml/src/ggml-metal/*.{m,cpp}'
   ]
@@ -37,7 +37,7 @@ Pod::Spec.new do |s|
     'DEFINES_MODULE' => 'YES',
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'SWIFT_ENABLE_EXPLICIT_MODULES' => 'NO',
-    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) GGML_USE_CPU GGML_USE_BLAS GGML_BLAS_USE_ACCELERATE GGML_USE_ACCELERATE GGML_USE_METAL WHISPER_USE_COREML WHISPER_COREML_ALLOW_FALLBACK ACCELERATE_NEW_LAPACK WHISPER_VERSION=\"1.9.1\" GGML_VERSION=\"0.15.1\" GGML_COMMIT=\"unknown\"',
+    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) GGML_USE_CPU GGML_USE_BLAS GGML_BLAS_USE_ACCELERATE GGML_USE_ACCELERATE GGML_USE_METAL WHISPER_USE_COREML WHISPER_COREML_ALLOW_FALLBACK ACCELERATE_NEW_LAPACK ACCELERATE_LAPACK_ILP64 WHISPER_VERSION=\"1.9.2\" GGML_VERSION=\"0.18.1\" GGML_COMMIT=\"unknown\"',
     'HEADER_SEARCH_PATHS' => '$(inherited) "${PODS_TARGET_SRCROOT}/whisper_cpp_flutter_plus/Sources/WhisperCppCore/include" "${PODS_TARGET_SRCROOT}/whisper_cpp_flutter_plus/Sources/WhisperCppCore/ggml/include" "${PODS_TARGET_SRCROOT}/whisper_cpp_flutter_plus/Sources/WhisperCppCore/ggml/src" "${PODS_TARGET_SRCROOT}/whisper_cpp_flutter_plus/Sources/WhisperCppCore/ggml/src/ggml-cpu" "${PODS_TARGET_SRCROOT}/whisper_cpp_flutter_plus/Sources/WhisperCppCore/ggml/src/ggml-metal"'
   }
   s.swift_version = '5.0'
