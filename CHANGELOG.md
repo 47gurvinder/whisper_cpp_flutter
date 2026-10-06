@@ -2,6 +2,14 @@
 
 All notable changes to `whisper_cpp_flutter_plus` are documented in this file.
 
+## 0.5.1 - 2026-10-06
+
+### Fixed
+
+- Fixed Android builds on Flutter projects using Android Gradle Plugin 8 by
+  removing the plugin's unnecessary Kotlin Gradle dependency.
+- Aligned the Android library's Java source and target compatibility at Java 11.
+
 ## 0.5.0 - 2026-10-06
 
 ### Added
