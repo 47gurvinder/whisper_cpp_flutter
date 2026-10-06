@@ -15,9 +15,10 @@ final class NativeBindings {
             ? DynamicLibrary.open('libwhisper_flutter.so')
             : DynamicLibrary.process() {
     contextCreate = lib.lookupFunction<
-        NativeContext Function(Pointer<Utf8>, Int32, Int32, Int32, Int32),
         NativeContext Function(
-            Pointer<Utf8>, int, int, int, int)>('wf_context_create');
+            Pointer<Utf8>, Int32, Int32, Int32, Int32, Int32),
+        NativeContext Function(
+            Pointer<Utf8>, int, int, int, int, int)>('wf_context_create');
     contextFree = lib.lookupFunction<Void Function(NativeContext),
         void Function(NativeContext)>('wf_context_free');
     jobCreate =
@@ -82,7 +83,7 @@ final class NativeBindings {
   }
   static final instance = NativeBindings._();
   final DynamicLibrary lib;
-  late final NativeContext Function(Pointer<Utf8>, int, int, int, int)
+  late final NativeContext Function(Pointer<Utf8>, int, int, int, int, int)
       contextCreate;
   late final void Function(NativeContext) contextFree;
   late final NativeJob Function(int) jobCreate;

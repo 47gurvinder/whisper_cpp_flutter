@@ -1,5 +1,11 @@
 #include "whisper_flutter.h"
+#if defined(__APPLE__)
+#include <whisper/ggml-backend.h>
+#include <whisper/whisper.h>
+#else
+#include "ggml-backend.h"
 #include "whisper.h"
+#endif
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -11,6 +17,7 @@
 
 namespace {
 thread_local std::string error;
+enum class BackendPolicy { automatic = 0, gpu = 1, cpu = 2 };
 struct Job {
   whisper_full_params p;
   std::string language = "auto", prompt, suppress_regex, vad_model;
@@ -32,10 +39,32 @@ std::string esc(const char * s) {
   return o.str();
 }
 char * copy(const std::string & s) { auto *p=static_cast<char *>(std::malloc(s.size()+1)); if(p) std::memcpy(p,s.c_str(),s.size()+1); return p; }
+
+bool gpu_backend_available() {
+  for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+    auto *dev = ggml_backend_dev_get(i);
+    const auto type = ggml_backend_dev_type(dev);
+    if (type != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        type != GGML_BACKEND_DEVICE_TYPE_IGPU) continue;
+    auto *backend = ggml_backend_dev_init(dev, nullptr);
+    if (!backend) continue;
+    ggml_backend_free(backend);
+    return true;
+  }
+  return false;
+}
 }
 
-void * wf_context_create(const char * path, int gpu, int flash, int dtw, int dtw_model) {
-  auto p=whisper_context_default_params(); p.use_gpu=gpu!=0; p.flash_attn=flash!=0;
+void * wf_context_create(const char * path, int backend, int flash, int dtw, int dtw_model, int coreml) {
+  error.clear();
+  const auto policy = static_cast<BackendPolicy>(backend);
+  const bool gpu_available = policy != BackendPolicy::cpu && gpu_backend_available();
+  if (policy == BackendPolicy::gpu && !gpu_available) {
+    error = "Metal/GPU backend was required but could not be initialized";
+    return nullptr;
+  }
+  auto p=whisper_context_default_params(); p.use_gpu=gpu_available; p.flash_attn=flash!=0 && gpu_available;
+  p.coreml_mode=static_cast<whisper_coreml_mode>(coreml);
   p.dtw_token_timestamps=dtw!=0; p.dtw_aheads_preset=static_cast<whisper_alignment_heads_preset>(dtw_model);
   auto *ctx=whisper_init_from_file_with_params(path,p);
   if(!ctx) error="Unable to load whisper model: "+std::string(path?path:"");
@@ -92,7 +121,7 @@ char * wf_run(void *c,void *jp,const float *samples,int n){auto*ctx=static_cast<
   auto us=std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-start).count();
   o<<"],\"text\":\""<<esc(full.c_str())<<"\",\"processing_us\":"<<us<<'}'; return copy(o.str());
 }
-void *wf_vad_create(const char *path,int gpu,int threads){auto p=whisper_vad_default_context_params();p.use_gpu=gpu;p.n_threads=threads;auto*c=whisper_vad_init_from_file_with_params(path,p);if(!c)error="Unable to load VAD model";return c;}
+void *wf_vad_create(const char *path,int gpu,int threads){auto p=whisper_vad_default_context_params();p.use_gpu=gpu&&gpu_backend_available();p.n_threads=threads;auto*c=whisper_vad_init_from_file_with_params(path,p);if(!c)error="Unable to load VAD model";return c;}
 void wf_vad_free(void*p){if(p)whisper_vad_free(static_cast<whisper_vad_context *>(p));}
 int wf_vad_is_speech(void*p,const float*s,int n,int continuous){if(!p||!s)return 0;auto*c=static_cast<whisper_vad_context *>(p);return continuous?whisper_vad_detect_speech_no_reset(c,s,n):whisper_vad_detect_speech(c,s,n);}
 void wf_vad_reset(void*p){if(p)whisper_vad_reset_state(static_cast<whisper_vad_context *>(p));}

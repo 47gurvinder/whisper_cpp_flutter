@@ -31,6 +31,7 @@
 #include <regex>
 #include <set>
 #include <string>
+#include <sys/stat.h>
 #include <thread>
 #include <vector>
 
@@ -3344,6 +3345,11 @@ static std::string whisper_get_coreml_path_encoder(std::string path_bin) {
 
     return path_bin;
 }
+
+static bool whisper_coreml_model_exists(const std::string & path) {
+    struct stat info;
+    return stat(path.c_str(), &info) == 0;
+}
 #endif
 
 #ifdef WHISPER_USE_OPENVINO
@@ -3440,17 +3446,30 @@ struct whisper_state * whisper_init_state(whisper_context * ctx) {
 #ifdef WHISPER_USE_COREML
     const auto path_coreml = whisper_get_coreml_path_encoder(ctx->path_model);
 
-    WHISPER_LOG_INFO("%s: loading Core ML model from '%s'\n", __func__, path_coreml.c_str());
-    WHISPER_LOG_INFO("%s: first run on a device may take a while ...\n", __func__);
+    const bool coreml_required = ctx->params.coreml_mode == WHISPER_COREML_MODE_REQUIRED;
+    const bool coreml_available = whisper_coreml_model_exists(path_coreml);
 
-    state->ctx_coreml = whisper_coreml_init(path_coreml.c_str());
-    if (!state->ctx_coreml) {
+    if (ctx->params.coreml_mode != WHISPER_COREML_MODE_DISABLED &&
+        (coreml_available || coreml_required)) {
+        WHISPER_LOG_INFO("%s: loading Core ML model from '%s'\n", __func__, path_coreml.c_str());
+        WHISPER_LOG_INFO("%s: first run on a device may take a while ...\n", __func__);
+        state->ctx_coreml = whisper_coreml_init(path_coreml.c_str());
+    } else if (ctx->params.coreml_mode == WHISPER_COREML_MODE_AUTOMATIC) {
+        WHISPER_LOG_INFO("%s: Core ML encoder not found; using the selected ggml backend\n", __func__);
+    }
+
+    if (ctx->params.coreml_mode != WHISPER_COREML_MODE_DISABLED && !state->ctx_coreml &&
+        (coreml_available || coreml_required)) {
         WHISPER_LOG_ERROR("%s: failed to load Core ML model from '%s'\n", __func__, path_coreml.c_str());
+        if (coreml_required) {
+            whisper_free_state(state);
+            return nullptr;
+        }
 #ifndef WHISPER_COREML_ALLOW_FALLBACK
         whisper_free_state(state);
         return nullptr;
 #endif
-    } else {
+    } else if (state->ctx_coreml) {
         WHISPER_LOG_INFO("%s: Core ML model loaded\n", __func__);
     }
 #endif
@@ -3608,6 +3627,7 @@ struct whisper_context_params whisper_context_default_params() {
         /*.use_gpu              =*/ true,
         /*.flash_attn           =*/ true,
         /*.gpu_device           =*/ 0,
+        /*.coreml_mode          =*/ WHISPER_COREML_MODE_AUTOMATIC,
 
         /*.dtw_token_timestamps =*/ false,
         /*.dtw_aheads_preset    =*/ WHISPER_AHEADS_NONE,

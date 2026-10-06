@@ -14,7 +14,8 @@ add_library(whisper_flutter SHARED
   ${WHISPER_NATIVE_ROOT}/WhisperCppFlutterBridge/whisper_flutter.cpp)
 target_include_directories(whisper_flutter PRIVATE
   ${WHISPER_NATIVE_ROOT}/WhisperCppFlutterBridge
-  ${WHISPER_NATIVE_ROOT}/WhisperCppCore/include)
+  ${WHISPER_NATIVE_ROOT}/WhisperCppCore/include
+  ${WHISPER_NATIVE_ROOT}/WhisperCppCore/ggml/include)
 target_link_libraries(whisper_flutter PRIVATE whisper)
 if(ANDROID)
   target_link_libraries(whisper_flutter PRIVATE log android)

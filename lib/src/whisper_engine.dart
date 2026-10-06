@@ -11,18 +11,26 @@ import 'recorder.dart';
 import 'streaming.dart';
 
 final class _ModelLoadInvocation {
-  const _ModelLoadInvocation(this.modelPath, this.useGpu,
-      this.useFlashAttention, this.useDtw, this.dtwModel);
+  const _ModelLoadInvocation(this.modelPath, this.backend,
+      this.useFlashAttention, this.coreMlMode, this.useDtw, this.dtwModel);
   final String modelPath;
-  final bool useGpu, useFlashAttention, useDtw;
+  final WhisperBackend backend;
+  final bool useFlashAttention, useDtw;
+  final WhisperCoreMlMode coreMlMode;
   final int dtwModel;
 
   int run() {
     final n = NativeBindings.instance;
     final path = modelPath.toNativeUtf8();
     try {
-      final context = n.contextCreate(path, useGpu ? 1 : 0,
-          useFlashAttention ? 1 : 0, useDtw ? 1 : 0, dtwModel);
+      final context = n.contextCreate(
+        path,
+        backend.index,
+        useFlashAttention ? 1 : 0,
+        useDtw ? 1 : 0,
+        dtwModel,
+        coreMlMode.index,
+      );
       if (context == nullptr) {
         throw WhisperException(n.lastError().toDartString());
       }
@@ -168,8 +176,14 @@ final class WhisperEngine {
   /// disposed.
   static Future<WhisperEngine> load(String modelPath,
       {WhisperConfig config = const WhisperConfig()}) async {
-    final invocation = _ModelLoadInvocation(modelPath, config.useGpu,
-        config.useFlashAttention, config.useDtw, config.dtwModel);
+    final invocation = _ModelLoadInvocation(
+      modelPath,
+      config.backend,
+      config.useFlashAttention,
+      config.coreMlMode,
+      config.useDtw,
+      config.dtwModel,
+    );
     final address = await Isolate.run<int>(invocation.run);
     return WhisperEngine._(Pointer<Void>.fromAddress(address));
   }

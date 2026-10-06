@@ -102,7 +102,7 @@ final class WhisperBenchmarkRunner {
   static const _deviceChannel = MethodChannel('whisper_cpp_flutter/recorder');
 
   static const modelConfiguration = WhisperConfig(
-    useGpu: true,
+    backend: WhisperBackend.automatic,
     useFlashAttention: true,
     useDtw: false,
     dtwModel: 0,
@@ -445,7 +445,7 @@ final class WhisperBenchmarkRunner {
       {
         'mode': mode.name,
         'model': {
-          'use_gpu': modelConfiguration.useGpu,
+          'backend': modelConfiguration.backend.name,
           'use_flash_attention': modelConfiguration.useFlashAttention,
           'use_dtw': modelConfiguration.useDtw,
           'dtw_model': modelConfiguration.dtwModel,

@@ -8,7 +8,9 @@ extern "C" {
 #else
 #define WF_API __attribute__((visibility("default"))) __attribute__((used))
 #endif
-WF_API void * wf_context_create(const char * model_path, int use_gpu, int flash_attn, int use_dtw, int dtw_model);
+// backend: 0 = automatic, 1 = require GPU, 2 = CPU.
+// coreml: 0 = automatic, 1 = disabled, 2 = required.
+WF_API void * wf_context_create(const char * model_path, int backend, int flash_attn, int use_dtw, int dtw_model, int coreml);
 WF_API void wf_context_free(void * context);
 WF_API void * wf_job_create(int strategy);
 WF_API void wf_job_free(void * job);

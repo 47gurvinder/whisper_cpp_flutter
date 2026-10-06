@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Options
-IOS_MIN_OS_VERSION=16.4
+IOS_MIN_OS_VERSION=14.0
 MACOS_MIN_OS_VERSION=13.3
 VISIONOS_MIN_OS_VERSION=1.0
 TVOS_MIN_OS_VERSION=16.4
@@ -12,13 +12,14 @@ WHISPER_BUILD_TESTS=OFF
 WHISPER_BUILD_SERVER=OFF
 GGML_METAL=ON
 GGML_METAL_EMBED_LIBRARY=ON
-GGML_BLAS_DEFAULT=ON
+GGML_BLAS_DEFAULT=OFF
 GGML_METAL_USE_BF16=ON
 GGML_OPENMP=OFF
 BUILD_STATIC_XCFRAMEWORK=${BUILD_STATIC_XCFRAMEWORK:-OFF}
+IOS_ONLY=${IOS_ONLY:-OFF}
 
-COMMON_C_FLAGS="-Wno-macro-redefined -Wno-shorten-64-to-32 -Wno-unused-command-line-argument -g"
-COMMON_CXX_FLAGS="-Wno-macro-redefined -Wno-shorten-64-to-32 -Wno-unused-command-line-argument -g"
+COMMON_C_FLAGS="-Wno-macro-redefined -Wno-shorten-64-to-32 -Wno-unused-command-line-argument"
+COMMON_CXX_FLAGS="-Wno-macro-redefined -Wno-shorten-64-to-32 -Wno-unused-command-line-argument"
 
 # Common options for all builds
 COMMON_CMAKE_ARGS=(
@@ -35,7 +36,7 @@ COMMON_CMAKE_ARGS=(
     -DWHISPER_BUILD_TESTS=${WHISPER_BUILD_TESTS}
     -DWHISPER_BUILD_SERVER=${WHISPER_BUILD_SERVER}
     -DGGML_METAL_EMBED_LIBRARY=${GGML_METAL_EMBED_LIBRARY}
-    -DGGML_BLAS_DEFAULT=${GGML_BLAS_DEFAULT}
+    -DGGML_BLAS=${GGML_BLAS_DEFAULT}
     -DGGML_METAL=${GGML_METAL}
     -DGGML_METAL_USE_BF16=${GGML_METAL_USE_BF16}
     -DGGML_NATIVE=OFF
@@ -60,7 +61,10 @@ check_required_tool() {
 echo "Checking for required tools..."
 check_required_tool "cmake" "Please install CMake 3.28.0 or later (brew install cmake)"
 check_required_tool "xcodebuild" "Please install Xcode and Xcode Command Line Tools (xcode-select --install)"
-check_required_tool "libtool" "Please install libtool which should be available with Xcode Command Line Tools (CLT). Make sure Xcode CLT is installed (xcode-select --install)"
+if [[ ! -x /usr/bin/libtool ]]; then
+    echo "Apple libtool is required at /usr/bin/libtool" >&2
+    exit 1
+fi
 check_required_tool "dsymutil" "Please install Xcode and Xcode Command Line Tools (xcode-select --install)"
 
 set -e
@@ -252,8 +256,11 @@ combine_static_libraries() {
         "${base_dir}/${build_dir}/ggml/src/${release_dir}/libggml-base.a"
         "${base_dir}/${build_dir}/ggml/src/${release_dir}/libggml-cpu.a"
         "${base_dir}/${build_dir}/ggml/src/ggml-metal/${release_dir}/libggml-metal.a"
-        "${base_dir}/${build_dir}/ggml/src/ggml-blas/${release_dir}/libggml-blas.a"
     )
+    local blas_lib="${base_dir}/${build_dir}/ggml/src/ggml-blas/${release_dir}/libggml-blas.a"
+    if [[ -f "${blas_lib}" ]]; then
+        libs+=("${blas_lib}")
+    fi
     if [[ "$platform" == "macos" || "$platform" == "ios" ]]; then
         echo "Adding libwhisper.coreml library to the build."
         libs+=(
@@ -268,7 +275,7 @@ combine_static_libraries() {
 
     # Since we have multiple architectures libtool will find object files that do not
     # match the target architecture. We suppress these warnings.
-    libtool -static -o "${temp_dir}/combined.a" "${libs[@]}" 2> /dev/null
+    /usr/bin/libtool -static -o "${temp_dir}/combined.a" "${libs[@]}" 2> /dev/null
 
     # Determine SDK, architectures, and install_name based on platform and simulator flag.
     local sdk=""
@@ -452,6 +459,20 @@ cmake -B build-ios-device -G Xcode \
     -DWHISPER_COREML_ALLOW_FALLBACK="ON" \
     -S .
 cmake --build build-ios-device --config Release -- -quiet
+
+if [[ "${IOS_ONLY}" == "ON" ]]; then
+    echo "Packaging iOS-only XCFramework..."
+    setup_framework_structure "build-ios-sim" ${IOS_MIN_OS_VERSION} "ios"
+    setup_framework_structure "build-ios-device" ${IOS_MIN_OS_VERSION} "ios"
+    combine_static_libraries "build-ios-sim" "Release-iphonesimulator" "ios" "true"
+    combine_static_libraries "build-ios-device" "Release-iphoneos" "ios" "false"
+    mkdir -p "$(pwd)/build-apple"
+    xcodebuild -create-xcframework \
+        -framework "$(pwd)/build-ios-sim/framework/whisper.framework" \
+        -framework "$(pwd)/build-ios-device/framework/whisper.framework" \
+        -output "$(pwd)/build-apple/whisper.xcframework"
+    exit 0
+fi
 
 echo "Building for macOS..."
 cmake -B build-macos -G Xcode \

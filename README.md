@@ -85,6 +85,11 @@ To use Core ML acceleration, place a compiled encoder such as
 `ggml-base.en-encoder.mlmodelc` beside the matching `ggml-base.en.bin` model.
 If the encoder is unavailable, inference falls back to Metal or the CPU.
 
+The iOS native library is distributed as one XCFramework for CocoaPods and
+Swift Package Manager. Its Metal kernel source is embedded, so applications do
+not need to copy shader resources into their bundles. Metal compiles the
+kernels when the native library first initializes them.
+
 ## Load a model
 
 Your application can obtain a compatible GGML model from any source and pass
@@ -94,6 +99,24 @@ its readable local filesystem path directly to the engine:
 final modelPath = await downloadModelToAppStorage();
 final engine = await WhisperEngine.load(modelPath);
 ```
+
+The default `WhisperBackend.automatic` policy preflights Metal and falls back
+to Accelerate/CPU before allocating model tensors. Applications can require a
+specific capability when appropriate:
+
+```dart
+final engine = await WhisperEngine.load(
+  modelPath,
+  config: const WhisperConfig(
+    backend: WhisperBackend.metal,
+    coreMlMode: WhisperCoreMlMode.automatic,
+  ),
+);
+```
+
+Use `WhisperBackend.cpu` to disable GPU acceleration. Use
+`WhisperCoreMlMode.required` when the matching compiled encoder is mandatory,
+or `WhisperCoreMlMode.disabled` to skip Core ML entirely.
 
 `WhisperEngine.load()` does not copy, move, or take ownership of the file. Keep
 the model available until `engine.dispose()` is called.

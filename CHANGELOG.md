@@ -2,6 +2,19 @@
 
 All notable changes to `whisper_cpp_flutter_plus` are documented in this file.
 
+## 0.5.0 - 2026-10-06
+
+### Added
+
+- Added automatic, required-Metal, and CPU backend policies with native GPU
+  preflight and safe CPU fallback before model allocation.
+- Added automatic, disabled, and required Core ML encoder policies.
+
+### Changed
+
+- Replaced separate CocoaPods and SwiftPM native source builds with a shared
+  iOS XCFramework containing embedded Metal kernels.
+
 ## 0.4.1 - 2026-08-18
 
 ### Changed

@@ -1065,7 +1065,19 @@ void ggml_metal_device_event_free(ggml_metal_device_t dev, ggml_metal_event_t ev
 
 void ggml_metal_device_event_synchronize(ggml_metal_device_t dev, ggml_metal_event_t ev) {
     id<MTLSharedEvent> event = ev->obj;
-    const bool res = [event waitUntilSignaledValue:atomic_load_explicit(&ev->value, memory_order_relaxed) timeoutMS:60000];
+    const uint64_t value = atomic_load_explicit(&ev->value, memory_order_relaxed);
+    bool res = false;
+    if (@available(macOS 12.0, iOS 15.0, tvOS 15.0, *)) {
+        res = [event waitUntilSignaledValue:value timeoutMS:60000];
+    } else {
+        // waitUntilSignaledValue:timeoutMS: was added in iOS 15. Poll the
+        // shared value on older supported systems without calling a newer API.
+        NSDate * deadline = [NSDate dateWithTimeIntervalSinceNow:60.0];
+        while (event.signaledValue < value && deadline.timeIntervalSinceNow > 0) {
+            [NSThread sleepForTimeInterval:0.001];
+        }
+        res = event.signaledValue >= value;
+    }
     if (!res) {
         GGML_ABORT("%s: failed to wait for event\n", __func__);
     }

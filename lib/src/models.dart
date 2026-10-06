@@ -42,6 +42,31 @@ enum WhisperLogLevel {
   trace,
 }
 
+/// Native compute backend selection used while loading a model.
+enum WhisperBackend {
+  /// Uses Metal or another GPU backend when it initializes successfully,
+  /// otherwise falls back to the CPU before model tensors are allocated.
+  automatic,
+
+  /// Requires an available GPU backend and fails model loading otherwise.
+  metal,
+
+  /// Uses CPU and platform matrix acceleration without attempting a GPU.
+  cpu,
+}
+
+/// Controls use of an optional compiled Core ML encoder on Apple platforms.
+enum WhisperCoreMlMode {
+  /// Uses the matching encoder when present and otherwise continues normally.
+  automatic,
+
+  /// Never attempts to load a Core ML encoder.
+  disabled,
+
+  /// Requires the matching encoder and fails model loading when unavailable.
+  required,
+}
+
 const _copyWithUnset = Object();
 
 /// An error reported by the Dart wrapper or native whisper.cpp runtime.
@@ -60,17 +85,30 @@ final class WhisperException implements Exception {
 final class WhisperConfig {
   /// Creates model-loading options.
   const WhisperConfig({
-    this.useGpu = true,
+    WhisperBackend backend = WhisperBackend.automatic,
+    @Deprecated('Use backend instead') bool? useGpu,
     this.useFlashAttention = true,
+    this.coreMlMode = WhisperCoreMlMode.automatic,
     this.useDtw = false,
     this.dtwModel = 0,
-  });
+  })  : assert(
+          useGpu == null || backend == WhisperBackend.automatic,
+          'Specify either backend or useGpu, not both',
+        ),
+        backend = useGpu == false ? WhisperBackend.cpu : backend;
 
-  /// Whether supported GPU acceleration should be enabled.
-  final bool useGpu;
+  /// Backend policy used during native model initialization.
+  final WhisperBackend backend;
+
+  /// Whether this configuration permits GPU acceleration.
+  @Deprecated('Use backend instead')
+  bool get useGpu => backend != WhisperBackend.cpu;
 
   /// Whether flash attention should be enabled when supported.
   final bool useFlashAttention;
+
+  /// Policy for the optional compiled Core ML encoder on Apple platforms.
+  final WhisperCoreMlMode coreMlMode;
 
   /// Whether dynamic-time-warping token timestamps should be enabled.
   final bool useDtw;
